@@ -280,6 +280,23 @@ main {
   justify-content: center;
 }
 
+/* Centered inner container for the live feed to avoid full-width stretching */
+.live-feed-inner {
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  max-width: 640px; /* constrains width so other dashboard panels can sit beside it */
+}
+
+@media (max-width: 760px) {
+  .live-feed-inner {
+    flex-direction: column;
+    max-width: 100%;
+  }
+}
+
 .strikezone-card {
   width: 100%;
   max-width: 350px;

@@ -63,18 +63,10 @@ export function LiveFeed({ initialPitch }: LiveFeedProps) {
   const isStrike = latestPitch.zone_eval?.includes("IN ZONE");
 
   return (
-    <div
-      className="live-feed"
-      style={{
-        display: "flex",
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 24,
-        padding: "20px 28px",
-      }}
-    >
-      {/* Left: pitch info */}
-      <div style={{ flex: "0 0 auto", textAlign: "center", minWidth: 180 }}>
+    <div className="live-feed">
+      <div className="live-feed-inner" style={{ display: "flex", gap: 24, alignItems: "center" }}>
+        {/* Left: pitch info */}
+        <div style={{ flex: "0 0 auto", textAlign: "center", minWidth: 180 }}>
         <p className="feed-label" style={{ margin: "0 0 4px" }}>
           Live from the Mound
         </p>
@@ -134,13 +126,12 @@ export function LiveFeed({ initialPitch }: LiveFeedProps) {
       </div>
 
       {/* Right: strike zone — only visible when live */}
-      {isLive && (
-        <div
-          style={{ flex: 1, maxWidth: 280, transition: "opacity 0.4s ease" }}
-        >
-          <StrikeZone pitchHistory={pitchHistory} latestPitch={latestPitch} />
-        </div>
-      )}
+        {isLive && (
+          <div style={{ flex: 1, maxWidth: 280, transition: "opacity 0.4s ease" }}>
+            <StrikeZone pitchHistory={pitchHistory} latestPitch={latestPitch} />
+          </div>
+        )}
+      </div>
     </div>
   );
 }
