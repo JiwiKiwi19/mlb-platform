@@ -257,5 +257,3 @@ mlb-platform/
 ---
 
 ## License
-
-MIT
