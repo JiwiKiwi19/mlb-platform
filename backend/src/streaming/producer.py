@@ -1,4 +1,5 @@
 import json
+import os, random
 import time
 import requests
 from confluent_kafka import Producer
@@ -7,6 +8,14 @@ from datetime import datetime
 conf = {'bootstrap.servers': 'localhost:19092', 'client.id': 'mlb-live-producer'}
 producer = Producer(conf)
 topic_name = "live-pitches"
+
+# Chaos injection configuration (disabled by default)
+ENABLE_CHAOS = os.getenv("ENABLE_CHAOS", "false").lower() in ("1", "true", "yes")
+CHAOS_MODE = os.getenv("CHAOS_MODE", "random")  # 'random' or 'deterministic'
+CHAOS_PROB = float(os.getenv("CHAOS_PROB", "0.05"))
+CHAOS_FATIGUE_INTERVAL = int(os.getenv("CHAOS_FATIGUE_INTERVAL", "12"))
+CHAOS_SPIKE_INTERVAL = int(os.getenv("CHAOS_SPIKE_INTERVAL", "18"))
+chaos_counter = 0
 
 def get_todays_blue_jays_game():
     # Get today's date in YYYY-MM-DD format
@@ -113,6 +122,27 @@ def start_live_stream():
                             "pitcher_last_name": pitcher_last_name,
                             "timestamp": time.time() 
                         }
+
+                        # Optional chaos injection: mutate the payload speed before producing
+                        if ENABLE_CHAOS:
+                            # deterministic mode: use a global counter to inject at fixed intervals
+                            if CHAOS_MODE == "deterministic":
+                                if chaos_counter > 0 and chaos_counter % CHAOS_FATIGUE_INTERVAL == 0:
+                                    print(f"\nINJECTING FATIGUE ANOMALY FOR {pitcher_last_name.upper()}...")
+                                    payload["speed_mph"] = max(0, float(payload.get("speed_mph", 0)) - 2.5)
+                                elif chaos_counter > 0 and chaos_counter % CHAOS_SPIKE_INTERVAL == 0:
+                                    print(f"\nINJECTING VELOCITY SPIKE FOR {pitcher_last_name.upper()}...")
+                                    payload["speed_mph"] = float(payload.get("speed_mph", 0)) + 2.0
+                                chaos_counter += 1
+                            else:
+                                # random mode: inject anomalies with configured probability
+                                if random.random() < CHAOS_PROB:
+                                    if random.random() < 0.6:
+                                        print(f"\nRANDOM: Injecting fatigue anomaly for {pitcher_last_name.upper()}...")
+                                        payload["speed_mph"] = max(0, float(payload.get("speed_mph", 0)) - 2.5)
+                                    else:
+                                        print(f"\nRANDOM: Injecting velocity spike for {pitcher_last_name.upper()}...")
+                                        payload["speed_mph"] = float(payload.get("speed_mph", 0)) + 2.0
 
                         producer.produce(
                             topic=topic_name,
