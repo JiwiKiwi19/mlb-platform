@@ -1,7 +1,7 @@
 python-dotenv>=1.0.1
 requests>=2.32.3
 supabase==2.0.2
-websockets>=14.0
+websockets>=11,<13
 pandas>=2.2.2
 pytest>=8.2.0
 pybaseball>=2.2.0

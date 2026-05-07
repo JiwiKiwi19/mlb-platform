@@ -17,7 +17,9 @@ if not supabase_url or not supabase_key:
 
 supabase = create_client(supabase_url, supabase_key)
 
-conf = {'bootstrap.servers': 'localhost:19092', 'group.id': 'mlb-supabase-loader', 'auto.offset.reset': 'latest'}
+KAFKA_BOOTSTRAP_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:19092")
+
+conf = {'bootstrap.servers': KAFKA_BOOTSTRAP_SERVERS, 'group.id': 'mlb-supabase-loader', 'auto.offset.reset': 'latest'}
 consumer = Consumer(conf)
 consumer.subscribe(["live-pitches"])
 
@@ -66,7 +68,7 @@ def analyze_pitch_for_alerts(pitch):
     return alerts
 
 def start_listening():
-    print("🎧 Consumer listening... Intelligence Engine Active!")
+    print("Consumer listening... Intelligence Engine Active!")
     try:
         while True:
             msg = consumer.poll(timeout=1.0)
@@ -75,7 +77,7 @@ def start_listening():
             pitch = json.loads(msg.value().decode('utf-8'))
             pitch['zone_eval'] = is_in_strike_zone(pitch.get('zone_x'), pitch.get('zone_z'))
             
-            # --- THE FIX: Convert Unix Timestamp to PostgreSQL format ---
+            # Convert Unix Timestamp to PostgreSQL format 
             if pitch.get('timestamp'):
                 try:
                     # Convert raw Unix epoch (e.g. 1777957271) to ISO 8601 string
@@ -85,16 +87,16 @@ def start_listening():
                     # If conversion fails, delete it so the DB uses its default NOW()
                     del pitch['timestamp']
             
-            # 1. Save the Pitch using the agent's safe upsert
+            # Save the Pitch using the agent's safe upsert
             success = _safe_upsert('live_pitches', pitch, conflict='unique_id')
             if success:
-                print(f"✅ Saved Pitch: {pitch.get('pitcher_full_name', 'Unknown')} - {pitch.get('pitch_type')} @ {pitch.get('speed_mph')}mph")
+                print(f"Saved Pitch: {pitch.get('pitcher_full_name', 'Unknown')} - {pitch.get('pitch_type')} @ {pitch.get('speed_mph')}mph")
             
-            # 2. Run Intelligence Engine & Save Alerts
+            # Run Intelligence Engine & Save Alerts
             alerts = analyze_pitch_for_alerts(pitch)
             for alert in alerts:
                 _safe_upsert('pitch_alerts', alert, conflict='unique_id')
-                print(f"🚨 ALERT [{alert['pitcher_name']}]: {alert['message']}")
+                print(f"ALERT [{alert['pitcher_name']}]: {alert['message']}")
             
     except KeyboardInterrupt:
         print("\nStopping consumer...")

@@ -1,57 +1,149 @@
-version: '3.8'
+name: mlb-streaming-cluster
 
 services:
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:v23.3.11
+    container_name: redpanda-broker
+    command:
+      - redpanda
+      - start
+      - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr internal://redpanda-broker:9092,external://localhost:19092
+      - --pandaproxy-addr internal://0.0.0.0:8082,external://0.0.0.0:18082
+      - --advertise-pandaproxy-addr internal://redpanda-broker:8082,external://localhost:18082
+      - --mode dev-container
+      - --smp 1
+      - --default-log-level=info
+    ports:
+      - 19092:19092
+      - 18081:18081
+      - 18082:18082
+      - 19644:9644
+    volumes:
+      - redpanda-data:/var/lib/redpanda/data
+    networks:
+      - mlb_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 20s
+
+  console:
+    image: docker.redpanda.com/redpandadata/console:v2.4.6
+    container_name: redpanda-console
+    networks:
+      - mlb_network
+    entrypoint: /bin/sh
+    command: -c 'echo "$$CONSOLE_CONFIG_FILE" > /tmp/config.yml; /app/console'
+    environment:
+      CONFIG_FILEPATH: /tmp/config.yml
+      CONSOLE_CONFIG_FILE: |
+        kafka:
+          brokers: ["redpanda-broker:9092"]
+        redpanda:
+          adminApi:
+            enabled: true
+            urls: ["http://redpanda-broker:9644"]
+    ports:
+      - 8080:8080
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    restart: unless-stopped
+
+  producer:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: mlb-producer
+    command: python -u src/streaming/producer.py
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: redpanda-broker:9092
+      ENABLE_CHAOS: ${ENABLE_CHAOS:-false}
+      CHAOS_MODE: ${CHAOS_MODE:-random}
+      CHAOS_PROB: ${CHAOS_PROB:-0.05}
+      CHAOS_FATIGUE_INTERVAL: ${CHAOS_FATIGUE_INTERVAL:-12}
+      CHAOS_SPIKE_INTERVAL: ${CHAOS_SPIKE_INTERVAL:-18}
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import socket; s=socket.create_connection(('redpanda-broker',9092),3); s.close(); print('ok')",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - mlb_network
+
+  consumer:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: mlb-consumer
+    command: python -u src/streaming/consumer.py
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: redpanda-broker:9092
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_KEY: ${SUPABASE_KEY}
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import socket; s=socket.create_connection(('redpanda-broker',9092),3); s.close(); print('ok')",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - mlb_network
+
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+    container_name: mlb-frontend
+    environment:
+      NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
     ports:
-      - "3000:3000"
-    environment:
-      - NEXT_PUBLIC_SUPABASE_URL=${SUPABASE_URL}
-      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${SUPABASE_KEY}
+      - 3005:3000
     depends_on:
-      - backend
+      redpanda:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/env-test"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    restart: unless-stopped
     networks:
-      - mlb-network
-
-  backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    ports:
-      - "5000:5000"
-    environment:
-      - SUPABASE_URL=${SUPABASE_URL}
-      - SUPABASE_KEY=${SUPABASE_KEY}
-      - KAFKA_BROKERS=${KAFKA_BROKERS:-kafka:9092}
-      - LOG_LEVEL=INFO
-    depends_on:
-      - kafka
-    networks:
-      - mlb-network
-    volumes:
-      - ./backend/data:/app/data
-
-  kafka:
-    image: confluentinc/cp-kafka:7.5.0
-    environment:
-      KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-    depends_on:
-      - zookeeper
-    networks:
-      - mlb-network
-
-  zookeeper:
-    image: confluentinc/cp-zookeeper:7.5.0
-    environment:
-      ZOOKEEPER_CLIENT_PORT: 2181
-    networks:
-      - mlb-network
+      - mlb_network
 
 networks:
-  mlb-network:
+  mlb_network:
     driver: bridge
+
+volumes:
+  redpanda-data:

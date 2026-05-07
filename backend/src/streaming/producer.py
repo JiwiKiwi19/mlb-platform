@@ -5,7 +5,9 @@ import requests
 from confluent_kafka import Producer
 from datetime import datetime
 
-conf = {'bootstrap.servers': 'localhost:19092', 'client.id': 'mlb-live-producer'}
+KAFKA_BOOTSTRAP_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:19092")
+
+conf = {'bootstrap.servers': KAFKA_BOOTSTRAP_SERVERS, 'client.id': 'mlb-live-producer'}
 producer = Producer(conf)
 topic_name = "live-pitches"
 
@@ -44,9 +46,10 @@ def get_todays_blue_jays_game():
         return None
 
 def start_live_stream():
+    global chaos_counter
     print("Starting Live MLB Polling Pipeline...")
     
-    # 1. Dynamically grab today's game
+    # Dynamically grab today's game
     game_pk = get_todays_blue_jays_game()
     if not game_pk:
         print("Exiting pipeline. Run this again when there is a game!")
@@ -54,10 +57,10 @@ def start_live_stream():
 
     feed_url = f"https://statsapi.mlb.com/api/v1.1/game/{game_pk}/feed/live"
     
-    # 2. Stateful Memory: Keep track of pitches we've already sent to Kafka
+    # Stateful Memory: Keep track of pitches we've already sent to Kafka
     processed_pitches = set()
 
-    # 3. The Live Polling Loop
+    # The Live Polling Loop
     while True:
         try:
             live_data = requests.get(feed_url).json()
@@ -123,9 +126,9 @@ def start_live_stream():
                             "timestamp": time.time() 
                         }
 
-                        # Optional chaos injection: mutate the payload speed before producing
+                        # Chaos injection: mutate the payload speed before producing
                         if ENABLE_CHAOS:
-                            # deterministic mode: use a global counter to inject at fixed intervals
+                            # Deterministic mode: use a global counter to inject at fixed intervals
                             if CHAOS_MODE == "deterministic":
                                 if chaos_counter > 0 and chaos_counter % CHAOS_FATIGUE_INTERVAL == 0:
                                     print(f"\nINJECTING FATIGUE ANOMALY FOR {pitcher_last_name.upper()}...")
@@ -159,7 +162,7 @@ def start_live_stream():
         except Exception as e:
             print(f"Error polling live data: {e}")
         
-        # 5. Wait 5 seconds before asking the MLB API for updates
+        # Wait 5 seconds before asking the MLB API for updates
         time.sleep(5)
 
 if __name__ == "__main__":

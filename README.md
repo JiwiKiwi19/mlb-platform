@@ -152,49 +152,45 @@ ALTER TABLE live_pitches DISABLE ROW LEVEL SECURITY;
 
 Then enable Realtime: **Supabase Dashboard → Database → Replication → toggle `live_pitches` ON**.
 
-### 4. Start the frontend
+### 4. Run the full autonomous stack (recommended)
+
+From `mlb-platform/`, export required environment variables:
 
 ```bash
-cd mlb-platform/frontend
-npm install
-npm run dev
+export SUPABASE_URL="https://your-project.supabase.co"
+export SUPABASE_KEY="your-service-role-key"
+export NEXT_PUBLIC_SUPABASE_URL="https://your-project.supabase.co"
+export NEXT_PUBLIC_SUPABASE_ANON_KEY="your-anon-key"
 ```
 
-Visit `http://localhost:3000`
-
-### 5. Start the streaming pipeline
-
-In one terminal, start the Redpanda broker (via Docker):
+Then start all services in one command:
 
 ```bash
-docker-compose up kafka
+docker compose up -d --build
 ```
 
-In another terminal, start the fake simulator:
+This starts:
+
+- Redpanda broker + console
+- Python producer (live MLB feed)
+- Python consumer (writes to Supabase + alerts)
+- Next.js frontend
+
+Open:
+
+- Dashboard: `http://localhost:3005`
+- Redpanda Console: `http://localhost:8080`
+
+### 5. Verify services are healthy
 
 ```bash
-cd mlb-platform/backend
-pip install -r requirements.txt
-python -m src.streaming.fake_simulator
+docker compose ps
+docker compose logs -f producer consumer frontend
 ```
 
-In another terminal, start the consumer:
+### 6. Optional local/dev mode (manual processes)
 
-```bash
-python -m src.streaming.consumer
-```
-
-Watch pitches appear on the dashboard in real time.
-
-### Live game mode (Blue Jays only)
-
-On a day the Blue Jays are playing, swap the simulator for the live producer:
-
-```bash
-python -m src.streaming.producer
-```
-
-The producer auto-detects today's game, filters for Toronto pitching appearances, and streams live StatCast pitch events.
+If you prefer manual process control, run frontend/producer/consumer directly as before. The containerized setup above is the deployment path for self-running operation.
 
 ---
 
