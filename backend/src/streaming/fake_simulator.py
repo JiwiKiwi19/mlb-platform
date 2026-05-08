@@ -3,7 +3,13 @@ import time
 import random
 from confluent_kafka import Producer
 
-conf = {'bootstrap.servers': 'localhost:19092', 'client.id': 'mlb-chaos-simulator'}
+def delivery_report(err, msg):
+    if err is not None:
+        print(f'❌ Message delivery failed: {err}')
+    # else:
+    #     print(f'✅ Message delivered to {msg.topic()}')
+
+conf = {'bootstrap.servers': 'localhost:19092', 'client.id': 'mlb-chaos-simulator', 'socket.timeout.ms': 10000}
 producer = Producer(conf)
 
 # Hardcode some Toronto Blue Jays aces
@@ -61,9 +67,11 @@ def generate_fake_stream():
         producer.produce(
             topic="live-pitches",
             key=payload['unique_id'].encode('utf-8'),
-            value=json.dumps(payload).encode('utf-8')
+            value=json.dumps(payload).encode('utf-8'),
+            callback=delivery_report
         )
-        producer.flush()
+        # Don't flush every time - just poll to handle callbacks
+        producer.poll(0)
 
         print(f"⚾ [FAKE] {pitcher['full']} threw a {payload['speed_mph']}mph {ptype}")
         

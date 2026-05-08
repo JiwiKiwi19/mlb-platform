@@ -5,6 +5,7 @@ import { createClient } from "@supabase/supabase-js";
 import { StrikeZone } from "./strike-zone";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+// IMPORTANT: Use ANON_KEY for Realtime subscriptions - SERVICE_KEY does NOT support Realtime
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
@@ -36,12 +37,23 @@ export function LiveFeed({ initialPitch }: LiveFeedProps) {
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "live_pitches" },
         (payload) => {
+          console.log("[LiveFeed] 🎯 New pitch received:", payload.new.pitch_type);
           setLatestPitch(payload.new);
           setPitchHistory((prev) => [...prev.slice(-49), payload.new]);
           markLive();
         },
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log("[LiveFeed] Subscription status:", status);
+        if (status === "SUBSCRIBED") {
+          console.log("[LiveFeed] ✅ Realtime subscriptions active");
+        }
+      });
+
+    // Debug: Check initial pitch data
+    if (initialPitch) {
+      console.log("[LiveFeed] 📊 Initial pitch loaded:", initialPitch.pitch_type);
+    }
 
     return () => {
       supabase.removeChannel(channel);
@@ -49,7 +61,7 @@ export function LiveFeed({ initialPitch }: LiveFeedProps) {
     };
   }, []);
 
-  if (!latestPitch || !isLive) {
+  if (!latestPitch) {
     return (
       <div className="empty-state">
         <p style={{ margin: 0, fontWeight: 700 }}>Stream Offline</p>
@@ -64,73 +76,81 @@ export function LiveFeed({ initialPitch }: LiveFeedProps) {
 
   return (
     <div className="live-feed">
-      <div className="live-feed-inner" style={{ display: "flex", gap: 24, alignItems: "center" }}>
+      <div
+        className="live-feed-inner"
+        style={{ display: "flex", gap: 24, alignItems: "center" }}
+      >
         {/* Left: pitch info */}
         <div style={{ flex: "0 0 auto", textAlign: "center", minWidth: 180 }}>
-        <p className="feed-label" style={{ margin: "0 0 4px" }}>
-          Live from the Mound
-        </p>
-        <h2 className="feed-velocity" style={{ margin: "0 0 2px" }}>
-          {latestPitch.speed_mph?.toFixed(1)} mph
-        </h2>
-        <p className="feed-type" style={{ margin: "0 0 8px" }}>
-          {latestPitch.pitch_type}
-        </p>
-        <p
-          style={{
-            margin: "0 0 4px",
-            fontSize: "0.8rem",
-            color: "var(--muted)",
-            fontWeight: 600,
-          }}
-        >
-          {latestPitch.pitcher_full_name}
-        </p>
-        <span className={`zone-pill ${isStrike ? "in" : "out"}`}>
-          {latestPitch.zone_eval}
-        </span>
-
-        {/* Stream status indicator */}
-        <div
-          style={{
-            marginTop: 12,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 6,
-          }}
-        >
-          <span
+          <p className="feed-label" style={{ margin: "0 0 4px" }}>
+            Live from the Mound
+          </p>
+          <h2 className="feed-velocity" style={{ margin: "0 0 2px" }}>
+            {latestPitch.speed_mph?.toFixed(1)} mph
+          </h2>
+          <p className="feed-type" style={{ margin: "0 0 8px" }}>
+            {latestPitch.pitch_type}
+          </p>
+          <p
             style={{
-              width: 8,
-              height: 8,
-              borderRadius: "50%",
-              background: isLive ? "var(--success)" : "var(--muted)",
-              display: "inline-block",
-              boxShadow: isLive ? "0 0 6px var(--success)" : "none",
-              transition: "all 0.4s ease",
-            }}
-          />
-          <span
-            style={{
-              fontSize: "0.72rem",
-              fontWeight: 700,
+              margin: "0 0 4px",
+              fontSize: "0.8rem",
               color: "var(--muted)",
-              letterSpacing: "0.08em",
-              textTransform: "uppercase",
+              fontWeight: 600,
             }}
           >
-            {isLive ? "Stream Live" : "Stream Offline"}
+            {latestPitch.pitcher_full_name}
+          </p>
+          <span className={`zone-pill ${isStrike ? "in" : "out"}`}>
+            {latestPitch.zone_eval}
           </span>
-        </div>
-      </div>
 
-      {/* Right: strike zone — only visible when live */}
-        {isLive && (
-          <div style={{ flex: 1, maxWidth: 280, transition: "opacity 0.4s ease" }}>
-            <StrikeZone pitchHistory={pitchHistory} latestPitch={latestPitch} />
+          {/* Stream status indicator */}
+          <div
+            style={{
+              marginTop: 12,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 6,
+            }}
+          >
+            <span
+              style={{
+                width: 8,
+                height: 8,
+                borderRadius: "50%",
+                background: isLive ? "var(--success)" : "var(--muted)",
+                display: "inline-block",
+                boxShadow: isLive ? "0 0 6px var(--success)" : "none",
+                transition: "all 0.4s ease",
+              }}
+            />
+            <span
+              style={{
+                fontSize: "0.72rem",
+                fontWeight: 700,
+                color: "var(--muted)",
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
+              }}
+            >
+              {isLive ? "Stream Live" : "Stream Offline"}
+            </span>
           </div>
-        )}
+        </div>
+
+        {/* Right: strike zone — keep showing the latest pitch state */}
+        <div
+          style={{
+            flex: 1,
+            maxWidth: 280,
+            transition: "opacity 0.4s ease",
+            opacity: isLive ? 1 : 0.82,
+          }}
+        >
+          <StrikeZone pitches={pitchHistory} />
+        </div>
       </div>
     </div>
   );

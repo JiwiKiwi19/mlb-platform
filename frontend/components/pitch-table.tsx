@@ -1,16 +1,9 @@
 "use client";
+
 import React, { useState, useEffect } from "react";
 import { createClient } from "@supabase/supabase-js";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-);
-
-interface PitchTableProps {
-  pitches: any[];
-}
-
+// Prevents Next.js Hydration crashes
 function ClientTime({ timestamp }: { timestamp: string | null }) {
   const [timeString, setTimeString] = useState("--:--:--");
   useEffect(() => {
@@ -26,10 +19,18 @@ function ClientTime({ timestamp }: { timestamp: string | null }) {
   return <>{timeString}</>;
 }
 
-export function PitchTable({ pitches: initialPitches }: PitchTableProps) {
-  const [pitches, setPitches] = useState<any[]>(initialPitches);
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  // IMPORTANT: Use ANON_KEY for Realtime subscriptions - SERVICE_KEY does NOT support Realtime
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+);
+
+export function PitchTable({ pitches: initialPitches }: { pitches: any[] }) {
+  const [pitches, setPitches] = useState<any[]>(initialPitches || []);
 
   useEffect(() => {
+    setPitches(initialPitches || []);
+
     const channel = supabase
       .channel("realtime-pitch-table")
       .on(
@@ -40,56 +41,70 @@ export function PitchTable({ pitches: initialPitches }: PitchTableProps) {
         },
       )
       .subscribe();
+
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [initialPitches]);
 
   if (!pitches || pitches.length === 0) {
-    return <div className="empty-state">Waiting for stream data...</div>;
+    return (
+      <div className="p-8 text-center text-muted-foreground border border-dashed rounded-lg">
+        Waiting for stream data...
+      </div>
+    );
   }
 
   return (
-    <div className="table-wrapper">
-      <table>
+    <div className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
+      <table className="w-full text-sm">
         <thead>
-          <tr>
-            <th>Time</th>
-            <th>Pitcher</th>
-            <th>Type</th>
-            <th>Velo (MPH)</th>
-            <th>Result</th>
+          <tr className="border-b border-border bg-secondary/40 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            <th className="px-4 py-3">Time</th>
+            <th className="px-4 py-3">Pitcher</th>
+            <th className="px-4 py-3">Type</th>
+            <th className="px-4 py-3 text-right">Velo</th>
+            <th className="px-4 py-3 text-right">Spin</th>
+            <th className="px-4 py-3">Result</th>
           </tr>
         </thead>
         <tbody>
-          {pitches.map((pitch) => {
-            const isInZone = pitch.zone_eval?.includes("IN ZONE");
+          {pitches.map((p, i) => {
+            const hot = (p.speed_mph || 0) >= 96;
+            const inZone = p.zone_eval?.includes("IN ZONE");
+
             return (
-              <tr key={pitch.unique_id ?? pitch.id}>
-                <td className="table-time">
-                  <ClientTime timestamp={pitch.timestamp} />
+              <tr
+                key={p.unique_id || i}
+                className="border-b border-border/60 last:border-0 transition-colors hover:bg-secondary/30"
+              >
+                <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
+                  <ClientTime timestamp={p.timestamp || p.created_at} />
                 </td>
-                <td className="table-pitcher">
-                  {pitch.pitcher_full_name || "Unknown Pitcher"}
-                </td>
-                <td>
-                  <span className="table-type-pill">
-                    {pitch.pitch_type || "Unknown"}
+                <td className="px-4 py-3 font-medium">{p.pitcher_full_name}</td>
+                <td className="px-4 py-3">
+                  <span className="inline-flex items-center rounded-md border border-border bg-secondary/50 px-2 py-0.5 text-xs font-medium">
+                    {p.pitch_type}
                   </span>
                 </td>
-                <td>
+                <td
+                  className={`px-4 py-3 text-right font-mono font-semibold ${hot ? "text-red-500" : ""}`}
+                >
+                  {p.speed_mph?.toFixed(1)}
+                </td>
+                <td className="px-4 py-3 text-right font-mono text-muted-foreground">
+                  {p.spin_rpm || "--"}
+                </td>
+                <td className="px-4 py-3">
                   <span
-                    className={`table-velo ${pitch.speed_mph > 95 ? "table-velo-hot" : ""}`}
+                    className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider ${
+                      inZone
+                        ? "bg-emerald-500/10 text-emerald-500"
+                        : "bg-secondary/60 text-muted-foreground"
+                    }`}
                   >
-                    {pitch.speed_mph ? pitch.speed_mph.toFixed(1) : "--"}
+                    {p.zone_eval}
                   </span>
-                </td>
-                <td>
-                  {isInZone ? (
-                    <span className="table-zone-badge in">In Zone</span>
-                  ) : (
-                    <span className="table-zone-badge out">Ball</span>
-                  )}
                 </td>
               </tr>
             );

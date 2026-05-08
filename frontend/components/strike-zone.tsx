@@ -4,12 +4,15 @@ type PitchDot = {
   zone_eval?: string;
 };
 
-type StrikeZoneProps = {
-  pitchHistory: PitchDot[];
-  latestPitch: PitchDot;
-};
+export interface StrikeZoneProps {
+  pitches: PitchDot[];
+}
 
-export function StrikeZone({ pitchHistory, latestPitch }: StrikeZoneProps) {
+export function StrikeZone({ pitches }: StrikeZoneProps) {
+  const pitchHistory = pitches || [];
+  const latestPitch = pitchHistory.length
+    ? pitchHistory[0]
+    : { zone_x: null, zone_z: null, zone_eval: "" };
   const W = 300;
   const H = 320;
 

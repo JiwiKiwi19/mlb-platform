@@ -1,134 +1,140 @@
 import { createClient } from "@supabase/supabase-js";
-import DashboardShell from "@/components/dashboard-shell";
-import { PitchTable } from "@/components/pitch-table";
+import { Activity, Gauge, Target, Zap } from "lucide-react";
+import { PageHeader } from "@/components/page-header";
 import { MetricCard } from "@/components/metric-card";
-import { LiveFeed } from "@/components/live-feed";
 import { VelocityChart } from "@/components/velocity-chart";
+import { PitchTable } from "@/components/pitch-table";
 
 export const dynamic = "force-dynamic";
 
-export default async function Home() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-  const supabase = createClient(supabaseUrl, supabaseKey);
+export default async function Overview() {
+  // Use SERVICE_KEY to bypass RLS restrictions
+  const serviceKey =
+    process.env.SUPABASE_SERVICE_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  const { data, error } = await supabase
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    serviceKey!,
+  );
+
+  const { data } = await supabase
     .from("live_pitches")
     .select("*")
-    .order("id", { ascending: false })
+    .order("created_at", { ascending: false })
     .limit(50);
+  const pitches: any[] = data || [];
 
-  const validPitches: any[] = (Array.isArray(data) ? data : []) as any[];
-
-  if (error) {
-    return (
-      <div className="p-10 text-red-500">Database Error: {error.message}</div>
-    );
-  }
-
-  const maxSpeed =
-    validPitches.length > 0
-      ? Math.max(...validPitches.map((p) => p.speed_mph || 0))
-      : 0;
-
-  const inZoneCount = validPitches.filter((p) =>
-    p.zone_eval?.includes("IN ZONE"),
-  ).length;
-  const zonePercent =
-    validPitches.length > 0 ? (inZoneCount / validPitches.length) * 100 : 0;
+  const max = pitches.length
+    ? Math.max(...pitches.map((p) => p.speed_mph || 0))
+    : 0;
+  const avg = pitches.length
+    ? pitches.reduce((a, p) => a + (p.speed_mph || 0), 0) / pitches.length
+    : 0;
+  const inZone = pitches.filter((p) => p.zone_eval?.includes("IN ZONE")).length;
+  const zonePct = pitches.length ? (inZone / pitches.length) * 100 : 0;
 
   return (
-    <DashboardShell>
-      <section className="hero">
-        <div>
-          <p className="eyebrow">Real-Time Event Stream</p>
-          <h1>MLB Live Pitch Analytics Lakehouse.</h1>
-          <p className="hero-copy">
-            This dashboard consumes a live Redpanda stream, processed in
-            real-time by a Python analytics consumer, and broadcasted via
-            Supabase WebSockets.
-          </p>
-        </div>
-        <div className="hero-panel">
-          <span className="panel-label">Infrastructure Status</span>
-          <strong className="text-emerald-400">Stream Online</strong>
-          <p>Listening to topic: `live-pitches`</p>
-        </div>
-      </section>
+    <div className="mx-auto flex max-w-[1400px] flex-col gap-6">
+      <PageHeader
+        eyebrow="Game Day · TOR Live Feed"
+        title="Live Pitch Intelligence"
+        description="Real-time Statcast feed processed through the streaming pipeline. Every pitch, classified and scored within a second of release."
+        meta={[
+          { label: "Status", value: "Live Polling" },
+          { label: "Topic", value: "live-pitches" },
+        ]}
+      />
 
-      <section className="metrics-grid mb-8">
+      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <MetricCard
-          label="Pitches Processed"
-          value={validPitches.length.toString()}
-          helperText="In current session view"
+          label="Pitches Tracked"
+          value={pitches.length.toString()}
+          helper="this session"
+          icon={Activity}
         />
         <MetricCard
           label="Top Velocity"
-          value={`${maxSpeed.toFixed(1)}`}
-          helperText="Max MPH in session"
+          value={max.toFixed(1)}
+          unit="mph"
+          helper="Session Max"
+          icon={Zap}
         />
         <MetricCard
           label="Zone Accuracy"
-          value={`${zonePercent.toFixed(1)}%`}
-          helperText="Pitches inside the strike zone"
+          value={zonePct.toFixed(1)}
+          unit="%"
+          helper={`${inZone} in-zone`}
+          icon={Target}
         />
         <MetricCard
-          label="Ingestion Latency"
-          value="< 1s"
-          helperText="API to Web UI"
+          label="Avg Velo"
+          value={avg.toFixed(1)}
+          unit="mph"
+          helper="All pitches"
+          icon={Gauge}
         />
       </section>
 
-      <section className="live-row mb-8">
-        <LiveFeed initialPitch={validPitches[0] ?? null} />
-      </section>
-
-      <section className="content-grid">
-        <article className="panel">
-          <div className="panel-header mb-0">
+      <section className="grid gap-6 lg:grid-cols-3">
+        <div className="rounded-xl border border-border bg-card p-5 shadow-card lg:col-span-2">
+          <div className="mb-4 flex items-end justify-between">
             <div>
-              <p className="section-label">Latest Velocity Trend</p>
-              <h2>Session Pitch Speeds</h2>
-            </div>
-            <span className="chip">Live Tracking</span>
-          </div>
-
-          <VelocityChart pitches={validPitches} />
-
-          <div className="panel-header mt-8">
-            <div>
-              <p className="section-label">Stream Log</p>
-              <h2>Recent Pitches</h2>
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-accent">
+                Velocity Trend
+              </p>
+              <h2 className="mt-1 font-display text-xl font-semibold">
+                Session Pitch Speed
+              </h2>
             </div>
           </div>
+          <VelocityChart pitches={pitches} />
+        </div>
 
-          <PitchTable pitches={validPitches} />
-        </article>
-
-        <aside className="panel notes-panel">
-          <div>
-            <p className="section-label">Data Architecture</p>
-            <h2>The Pipeline</h2>
-          </div>
-          <ul>
-            <li>
-              <strong>Extract:</strong> Python polling MLB Stats API
-            </li>
-            <li>
-              <strong>Buffer:</strong> Local Redpanda (Kafka) Cluster
-            </li>
-            <li>
-              <strong>Consume:</strong> Python real-time spatial analytics
-            </li>
-            <li>
-              <strong>Load:</strong> Supabase PostgreSQL
-            </li>
-            <li>
-              <strong>Serve:</strong> Next.js + Realtime WebSockets
-            </li>
+        <div className="rounded-xl border border-border bg-card p-5 shadow-card">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-accent">
+            Pipeline
+          </p>
+          <h2 className="mt-1 font-display text-xl font-semibold">
+            Stream Health
+          </h2>
+          <ul className="mt-5 space-y-3.5 text-sm">
+            {[
+              { k: "Producer", v: "MLB Stats API" },
+              { k: "Broker", v: "Redpanda" },
+              { k: "Consumer", v: "Python Engine" },
+              { k: "Sink", v: "Postgres Realtime" },
+            ].map((r) => (
+              <li
+                key={r.k}
+                className="flex items-center justify-between border-b border-border/60 pb-3 last:border-0 last:pb-0"
+              >
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    {r.k}
+                  </p>
+                  <p className="mt-0.5 text-sm">{r.v}</p>
+                </div>
+                <span className="h-2 w-2 rounded-full bg-[oklch(0.7_0.18_145)] shadow-[0_0_8px_oklch(0.7_0.18_145)]" />
+              </li>
+            ))}
           </ul>
-        </aside>
+        </div>
       </section>
-    </DashboardShell>
+
+      <section className="rounded-xl border border-border bg-card p-5 shadow-card">
+        <div className="mb-4 flex items-end justify-between">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-accent">
+              Stream Log
+            </p>
+            <h2 className="mt-1 font-display text-xl font-semibold">
+              Recent Pitches
+            </h2>
+          </div>
+        </div>
+        <PitchTable pitches={pitches} />
+      </section>
+    </div>
   );
 }
