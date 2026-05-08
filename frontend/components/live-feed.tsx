@@ -37,7 +37,10 @@ export function LiveFeed({ initialPitch }: LiveFeedProps) {
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "live_pitches" },
         (payload) => {
-          console.log("[LiveFeed] 🎯 New pitch received:", payload.new.pitch_type);
+          console.log(
+            "[LiveFeed] 🎯 New pitch received:",
+            payload.new.pitch_type,
+          );
           setLatestPitch(payload.new);
           setPitchHistory((prev) => [...prev.slice(-49), payload.new]);
           markLive();
@@ -52,7 +55,10 @@ export function LiveFeed({ initialPitch }: LiveFeedProps) {
 
     // Debug: Check initial pitch data
     if (initialPitch) {
-      console.log("[LiveFeed] 📊 Initial pitch loaded:", initialPitch.pitch_type);
+      console.log(
+        "[LiveFeed] 📊 Initial pitch loaded:",
+        initialPitch.pitch_type,
+      );
     }
 
     return () => {
