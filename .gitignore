@@ -18,3 +18,5 @@ data/processed/
 coverage/
 .ruff_cache/
 .mypy_cache/
+.coverage
+htmlcov/
