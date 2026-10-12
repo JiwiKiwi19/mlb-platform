@@ -2,7 +2,14 @@ import type { Metadata } from "next";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { Bell, Search, User } from "lucide-react";
+import { ConnectionBadge } from "@/components/connection-badge";
+import { LivePitchesProvider } from "@/components/providers/live-pitches-provider";
+import { fetchRecentPitches } from "@/lib/supabase/server";
 import "./globals.css";
+
+// The layout persists across client navigations, so the realtime subscription
+// and pitch buffer it hosts survive page changes. Always render fresh data.
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Statcast — Live MLB Pitch Analytics",
@@ -10,14 +17,17 @@ export const metadata: Metadata = {
     "Real-time MLB pitch tracking, velocity analytics and strike-zone intelligence.",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const initialPitches = await fetchRecentPitches();
+
   return (
     <html lang="en" className="dark">
-      <body className="bg-background text-foreground min-h-screen">
+      <body className="min-h-screen bg-background text-foreground">
+        <LivePitchesProvider initialPitches={initialPitches}>
         <SidebarProvider>
           <div className="flex min-h-screen w-full">
             <AppSidebar />
@@ -35,10 +45,7 @@ export default function RootLayout({
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="hidden items-center gap-1.5 rounded-md border border-border bg-secondary/40 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground sm:inline-flex">
-                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[oklch(0.7_0.18_145)]" />
-                    Live
-                  </span>
+                  <ConnectionBadge className="hidden rounded-md border border-border bg-secondary/40 px-2.5 py-1 sm:inline-flex" />
                   <button className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground">
                     <Bell className="h-4 w-4" />
                   </button>
@@ -51,6 +58,7 @@ export default function RootLayout({
             </div>
           </div>
         </SidebarProvider>
+        </LivePitchesProvider>
       </body>
     </html>
   );
