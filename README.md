@@ -126,31 +126,11 @@ SUPABASE_KEY=your-service-role-key
 
 ### 3. Set up Supabase
 
-Run this in your Supabase SQL Editor to create the `live_pitches` table:
+The schema lives in [`supabase/migrations/`](supabase/migrations/). Apply it with the Supabase CLI (`supabase db push`) or paste each file into the SQL Editor in order.
 
-```sql
-CREATE TABLE live_pitches (
-  id              BIGSERIAL PRIMARY KEY,
-  game_id         INTEGER,
-  unique_id       TEXT UNIQUE,
-  pitch_type      TEXT,
-  speed_mph       FLOAT,
-  zone_x          FLOAT,
-  zone_z          FLOAT,
-  zone_eval       TEXT,
-  pitcher_id      TEXT,
-  pitcher_full_name TEXT,
-  pitcher_first_name TEXT,
-  pitcher_last_name  TEXT,
-  pitcher_team    TEXT,
-  timestamp       TIMESTAMPTZ,
-  created_at      TIMESTAMPTZ DEFAULT NOW()
-);
+The migration creates `live_pitches` and `pitch_alerts`, adds both to the `supabase_realtime` publication, and enables Row Level Security with **read-only** access for the `anon` role. Only the backend's service-role key can write.
 
-ALTER TABLE live_pitches DISABLE ROW LEVEL SECURITY;
-```
-
-Then enable Realtime: **Supabase Dashboard → Database → Replication → toggle `live_pitches` ON**.
+> **Never disable RLS.** The anon key ships to every browser; without RLS anyone holding it can modify or delete data.
 
 ### 4. Run the full autonomous stack (recommended)
 
