@@ -9,3 +9,5 @@ coverage
 vitest.config.*
 Dockerfile
 .dockerignore
+test
+vitest.setup.ts

@@ -32,13 +32,7 @@ const LivePitchesContext = createContext<LivePitchesValue | null>(null);
 // which breaks StrictMode's mount → unmount → mount cycle.
 let channelSeq = 0;
 
-export function LivePitchesProvider({
-  initialPitches,
-  children,
-}: {
-  initialPitches: Pitch[];
-  children: ReactNode;
-}) {
+export function LivePitchesProvider({ initialPitches, children }: { initialPitches: Pitch[]; children: ReactNode }) {
   const [state, dispatch] = useReducer(livePitchesReducer, {
     pitches: initialPitches,
     status: "connecting",
