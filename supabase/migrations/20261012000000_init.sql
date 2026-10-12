@@ -59,6 +59,13 @@ create table if not exists public.pitch_alerts (
   created_at        timestamptz not null default now()
 );
 
+-- Projects that created pitch_alerts by hand for the pre-v1 consumer lack these.
+alter table public.pitch_alerts add column if not exists game_id integer;
+alter table public.pitch_alerts add column if not exists pitch_type text;
+alter table public.pitch_alerts add column if not exists baseline_mph double precision;
+alter table public.pitch_alerts add column if not exists recent_mph double precision;
+alter table public.pitch_alerts add column if not exists delta_mph double precision;
+
 create index if not exists pitch_alerts_created_at_idx
   on public.pitch_alerts (created_at desc);
 
