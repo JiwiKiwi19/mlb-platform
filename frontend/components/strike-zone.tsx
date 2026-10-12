@@ -11,8 +11,16 @@ export interface StrikeZoneProps {
 export function StrikeZone({ pitches }: StrikeZoneProps) {
   const pitchHistory = pitches || [];
   const latestPitch = pitchHistory.length
-    ? pitchHistory[0]
+    ? pitchHistory[pitchHistory.length - 1]
     : { zone_x: null, zone_z: null, zone_eval: "" };
+  // Debug: show incoming pitch values to help diagnose rendering
+  if (process.env.NODE_ENV !== "production") {
+    console.debug("[StrikeZone] pitches:", pitchHistory.length, "latest:", {
+      zone_x: latestPitch?.zone_x,
+      zone_z: latestPitch?.zone_z,
+      zone_eval: latestPitch?.zone_eval,
+    });
+  }
   const W = 300;
   const H = 320;
 
@@ -53,8 +61,8 @@ export function StrikeZone({ pitches }: StrikeZoneProps) {
       <svg
         viewBox={`0 0 ${W} ${H}`}
         width="100%"
-        height="auto"
         style={{
+          height: "100%",
           borderRadius: 10,
           background: "#f8fbff",
           border: "1px solid #dbe8fb",
