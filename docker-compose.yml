@@ -59,14 +59,9 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: mlb-producer
-    command: python -u src/streaming/producer.py
+    command: python -m mlb_pipeline.producer
     environment:
       KAFKA_BOOTSTRAP_SERVERS: redpanda-broker:9092
-      ENABLE_CHAOS: ${ENABLE_CHAOS:-false}
-      CHAOS_MODE: ${CHAOS_MODE:-random}
-      CHAOS_PROB: ${CHAOS_PROB:-0.05}
-      CHAOS_FATIGUE_INTERVAL: ${CHAOS_FATIGUE_INTERVAL:-12}
-      CHAOS_SPIKE_INTERVAL: ${CHAOS_SPIKE_INTERVAL:-18}
     depends_on:
       redpanda:
         condition: service_healthy
@@ -91,7 +86,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: mlb-consumer
-    command: python -u src/streaming/consumer.py
+    command: python -m mlb_pipeline.consumer
     environment:
       KAFKA_BOOTSTRAP_SERVERS: redpanda-broker:9092
       SUPABASE_URL: ${SUPABASE_URL}
