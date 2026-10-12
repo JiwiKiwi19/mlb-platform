@@ -5,7 +5,6 @@ import { createClient } from "@supabase/supabase-js";
 import { StrikeZone } from "./strike-zone";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-// IMPORTANT: Use ANON_KEY for Realtime subscriptions - SERVICE_KEY does NOT support Realtime
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
@@ -37,12 +36,18 @@ export function LiveFeed({ initialPitch }: LiveFeedProps) {
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "live_pitches" },
         (payload) => {
-          console.log(
-            "[LiveFeed] 🎯 New pitch received:",
-            payload.new.pitch_type,
-          );
+          console.log("[LiveFeed] 🎯 New pitch received:", payload.new.pitch_type);
           setLatestPitch(payload.new);
-          setPitchHistory((prev) => [...prev.slice(-49), payload.new]);
+          setPitchHistory((prev) => {
+            const newHistory = [...prev.slice(-49), payload.new];
+            console.debug("[LiveFeed] pitchHistory updated:", {
+              length: newHistory.length,
+              latest_zone_x: payload.new.zone_x,
+              latest_zone_z: payload.new.zone_z,
+              latest_zone_eval: payload.new.zone_eval,
+            });
+            return newHistory;
+          });
           markLive();
         },
       )
@@ -67,15 +72,9 @@ export function LiveFeed({ initialPitch }: LiveFeedProps) {
     };
   }, []);
 
+  // Show nothing if no pitch data yet
   if (!latestPitch) {
-    return (
-      <div className="empty-state">
-        <p style={{ margin: 0, fontWeight: 700 }}>Stream Offline</p>
-        <p style={{ margin: "4px 0 0", fontSize: "0.82rem" }}>
-          Strike zone feed will appear when the game is live.
-        </p>
-      </div>
-    );
+    return null;
   }
 
   const isStrike = latestPitch.zone_eval?.includes("IN ZONE");
@@ -157,6 +156,7 @@ export function LiveFeed({ initialPitch }: LiveFeedProps) {
         >
           <StrikeZone pitches={pitchHistory} />
         </div>
+        
       </div>
     </div>
   );
