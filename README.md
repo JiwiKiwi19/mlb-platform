@@ -1,9 +1,9 @@
 # ⚾ MLB StatCast Live Analytics Platform
 
-> A production-grade, event-driven data lakehouse for real-time MLB pitch intelligence — built on Kafka, Supabase, and Next.js.
+> Event-driven, real-time MLB pitch intelligence — MLB Stats API → Kafka (Redpanda) → Python intelligence engine → Supabase → Next.js live dashboard.
 
 ![Next.js](https://img.shields.io/badge/Next.js_14-000000?style=flat-square&logo=next.js&logoColor=white)
-![Python](https://img.shields.io/badge/Python_3.10+-3776AB?style=flat-square&logo=python&logoColor=white)
+![Python](https://img.shields.io/badge/Python_3.12-3776AB?style=flat-square&logo=python&logoColor=white)
 ![Kafka](https://img.shields.io/badge/Redpanda_Kafka-E50695?style=flat-square&logo=apachekafka&logoColor=white)
 ![Supabase](https://img.shields.io/badge/Supabase-3ECF8E?style=flat-square&logo=supabase&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white)
@@ -11,224 +11,230 @@
 
 ---
 
-## Overview
-
-The MLB StatCast Live Analytics Platform is a full-stack, real-time data engineering project that ingests live pitch data from the MLB Stats API, streams it through a Kafka-based message bus, enriches it with a Python intelligence engine, and delivers it to a live web dashboard — all with sub-second latency.
-
-This project demonstrates end-to-end data engineering across the full lakehouse stack: event streaming, real-time transformation, analytical storage, and live UI delivery via WebSockets.
-
----
-
 ## Architecture
 
 ```
-MLB Stats API / Fake Simulator
-        │
-        ▼
-  Redpanda (Kafka)          ← topic: live-pitches
-  [Producer]
-        │
-        ▼
-  Python Consumer           ← Real-time enrichment & analytics
-  - Strike zone classification
-  - Velocity anomaly detection (fatigue alerts)
-  - Timestamp normalization
-        │
-        ▼
-  Supabase (PostgreSQL)     ← Persistent storage + Realtime engine
-        │
-        ▼
-  Next.js 14 Dashboard      ← Server-side fetch + WebSocket subscriptions
-  - Live strike zone SVG
-  - Pitch velocity trend chart
-  - Real-time pitch table
-  - KPI metric cards
+MLB Stats API ──► producer ─┐                              ┌──► live-pitches.dlq (invalid messages)
+                            ├──► Redpanda: live-pitches ──► consumer ──► Supabase Postgres ──► Realtime ──► Next.js
+simulator (optional) ───────┘    (3 partitions,              • schema validation    (live_pitches,     (one WebSocket
+                                  key = game:pitcher)         • zone classification   pitch_alerts)      channel per tab)
+                                                              • fatigue detection
 ```
 
----
-
-## Features
-
-### 🔴 Real-Time Event Streaming
-
-- **Redpanda (Kafka-compatible)** message broker ingesting live MLB pitch events at ~1 pitch/1.5 seconds
-- Stateful Python producer polling the MLB Stats API every 5 seconds, deduplicating pitches in memory to guarantee exactly-once delivery
-- Fake simulator for local development that injects synthetic pitch data with chaos engineering — controlled fatigue anomalies and velocity spikes to stress-test the intelligence engine
-
-### 🧠 Intelligence Engine
-
-- Real-time strike zone classification using official MLB rulebook coordinates (`±0.83 ft` horizontal, `1.5–3.5 ft` vertical)
-- Velocity anomaly detection: tracks rolling pitch velocity history per pitcher per pitch type, fires fatigue alerts when a >1.5 mph drop is detected across a 10-pitch window
-- Safe upsert pattern with automatic column introspection — dynamically retries on schema mismatch without crashing the consumer
-
-### 🗄️ Data Lakehouse (Supabase)
-
-- PostgreSQL backend with structured `live_pitches` schema storing spatial coordinates, pitch metadata, and enriched zone evaluations
-- Supabase Realtime WebSocket subscriptions push `INSERT` events directly to the frontend — zero polling
-- Idempotent upsert strategy on `unique_id` prevents duplicate rows from replayed Kafka offsets
-
-### 📊 Live Dashboard (Next.js 14)
-
-- **Strike zone visualizer**: SVG-based catcher's-view diagram accumulating pitch history, color-coded red (strikes) and blue (balls), with the latest pitch glowing
-- **Velocity trend chart**: Recharts area chart tracking pitch speed across the session, dynamically scaled per pitch type
-- **Live pitch table**: Real-time prepending rows via Supabase WebSocket subscription — no page refresh required
-- **KPI cards**: Top velocity, zone accuracy %, total pitches processed, ingestion latency
-- **Stream presence detection**: Live feed section appears/disappears automatically based on consumer heartbeat — 10-second timeout with "Stream Offline" fallback state
+| Component | Responsibility                                                                                                                                                                      |
+| --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Producer  | Follows the team's schedule (yesterday + today, ET). Idles when no game is live; polls every live game's feed (doubleheaders included) and publishes each new pitch once.           |
+| Consumer  | Validates each message against the `PitchEvent` contract, batch-upserts to Supabase, runs the fatigue detector, then commits offsets. Invalid messages go to the dead-letter topic. |
+| Simulator | Synthetic pitches with chaos-injected fatigue episodes, for demos and local development.                                                                                           |
+| Dashboard | Server-renders the latest 50 pitches, then keeps them live over a single Supabase Realtime channel shared by every widget.                                                          |
 
 ---
 
-## Tech Stack
+## Reliability model
 
-| Layer                | Technology                                        |
-| -------------------- | ------------------------------------------------- |
-| **Frontend**         | Next.js 14 (App Router), TypeScript, Recharts     |
-| **Realtime**         | Supabase WebSockets (`postgres_changes`)          |
-| **Database**         | Supabase PostgreSQL                               |
-| **Message Broker**   | Redpanda (Kafka-compatible)                       |
-| **Stream Producer**  | Python 3.10, `confluent-kafka`, MLB Stats API     |
-| **Stream Consumer**  | Python 3.10, `confluent-kafka`, `supabase-py`     |
-| **Intelligence**     | NumPy — rolling velocity stats, anomaly detection |
-| **Containerization** | Docker, Docker Compose                            |
+**Delivery semantics: at-least-once, idempotent sink.**
+
+- The producer is idempotent (`enable.idempotence`, `acks=all`). Delivery failures surface through delivery callbacks, and back-pressure is handled.
+- The consumer commits offsets **only after** the batch is written. A crash re-delivers the batch.
+- Writes upsert on `unique_id`, and alert IDs are deterministic (`fatigue:<pitch id>`), so a redelivered batch changes nothing.
+- Messages are keyed by `game:pitcher`, so each pitcher's pitches stay ordered within a partition. The fatigue detector depends on that ordering.
+
+**Failure handling**
+
+| Failure                                            | Behaviour                                                                                     |
+| -------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| MLB API errors / 429 / 5xx                         | urllib3 retries with backoff (honours `Retry-After`); the loop logs and tries again next tick |
+| Supabase transient error (network, 5xx, timeout)   | Exponential backoff with jitter (tenacity), 8 attempts                                        |
+| Supabase permanent error (schema drift, constraint) | Fails immediately and loudly; offsets are not committed                                      |
+| Retries exhausted                                  | Consumer exits non-zero → Docker restarts it → batch is reprocessed                           |
+| Malformed / unknown-version message                | Forwarded to `live-pitches.dlq` with the validation error in a header, then committed         |
+| Worker loop stuck                                  | Heartbeat file goes stale → container healthcheck fails                                       |
+| Consumer restart mid-game                          | Fatigue baselines are re-primed from the last 12h of `live_pitches`                           |
+
+## Fatigue detector
+
+For each **(game, pitcher, pitch type)** the detector works in three steps:
+
+1. It freezes a baseline from the first 7 pitches of that pitch type in the outing.
+2. It compares that baseline against a rolling mean of the latest 3 pitches.
+3. It raises an alert when the drop is ≥ 1.5 mph. A drop of ≥ 3.0 mph is marked critical.
+
+After an alert, a 10-pitch cooldown prevents repeat alerts while velocity stays down. Memory is bounded: each key keeps a fixed-size window, and the number of keys is capped with LRU eviction. All thresholds can be changed through environment variables (see [Configuration](#configuration)).
 
 ---
 
-## Getting Started
+## Getting started
 
 ### Prerequisites
 
-- Docker & Docker Compose
-- Node.js 18+
-- Python 3.10+
+- Docker with Compose v2
 - A [Supabase](https://supabase.com) project
+- For local development: Node.js 20.18+ (22 LTS recommended) and Python 3.12
 
-### 1. Clone the repo
+### 1. Create the database schema
 
-```bash
-git clone https://github.com/your-username/mlb-stat-pipeline.git
-cd mlb-stat-pipeline
-```
+Apply [`supabase/migrations/`](supabase/migrations/) with `supabase db push`, or paste the files into the SQL Editor in order.
 
-### 2. Configure environment variables
+The migration does three things:
 
-Create `mlb-platform/frontend/.env.local`:
+- creates `live_pitches` and `pitch_alerts`
+- adds both tables to the `supabase_realtime` publication
+- enables Row Level Security, with **read-only** access for the `anon` role
+
+> **Never disable RLS.** The anon key ships to every browser. Without RLS, anyone who has it can modify or delete data. Only the backend's service-role key can write.
+
+### 2. Configure environment
+
+Create `mlb-platform/.env`, which Docker Compose reads automatically:
 
 ```env
+# Consumer: must be the service-role key
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_KEY=your-service-role-key
+
+# Frontend: inlined into the browser bundle at build time
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 ```
 
-Create `mlb-platform/backend/.env`:
+`.env` files are git-ignored and excluded from every Docker build context.
 
-```env
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_KEY=your-service-role-key
-```
-
-### 3. Set up Supabase
-
-The schema lives in [`supabase/migrations/`](supabase/migrations/). Apply it with the Supabase CLI (`supabase db push`) or paste each file into the SQL Editor in order.
-
-The migration creates `live_pitches` and `pitch_alerts`, adds both to the `supabase_realtime` publication, and enables Row Level Security with **read-only** access for the `anon` role. Only the backend's service-role key can write.
-
-> **Never disable RLS.** The anon key ships to every browser; without RLS anyone holding it can modify or delete data.
-
-### 4. Run the full autonomous stack (recommended)
-
-From `mlb-platform/`, export required environment variables:
+### 3. Run the stack
 
 ```bash
-export SUPABASE_URL="https://your-project.supabase.co"
-export SUPABASE_KEY="your-service-role-key"
-export NEXT_PUBLIC_SUPABASE_URL="https://your-project.supabase.co"
-export NEXT_PUBLIC_SUPABASE_ANON_KEY="your-anon-key"
+docker compose up -d --build                        # live MLB feed
+docker compose --profile simulator up -d --build    # also stream synthetic pitches
 ```
 
-Then start all services in one command:
+| Service          | URL                    |
+| ---------------- | ---------------------- |
+| Dashboard        | http://localhost:3005  |
+| Redpanda Console | http://localhost:8080  |
+| Schema Registry  | http://localhost:18081 |
 
 ```bash
-docker compose up -d --build
+docker compose ps                 # health status of every service
+docker compose logs -f consumer   # structured JSON logs
 ```
-
-This starts:
-
-- Redpanda broker + console
-- Python producer (live MLB feed)
-- Python consumer (writes to Supabase + alerts)
-- Next.js frontend
-
-Open:
-
-- Dashboard: `http://localhost:3005`
-- Redpanda Console: `http://localhost:8080`
-
-### 5. Verify services are healthy
-
-```bash
-docker compose ps
-docker compose logs -f producer consumer frontend
-```
-
-### 6. Optional local/dev mode (manual processes)
-
-If you prefer manual process control, run frontend/producer/consumer directly as before. The containerized setup above is the deployment path for self-running operation.
 
 ---
 
-## Data Schema
+## Local development
 
-| Field               | Type          | Description                                     |
-| ------------------- | ------------- | ----------------------------------------------- |
-| `unique_id`         | `TEXT`        | Deduplication key (game + at-bat + pitch index) |
-| `pitch_type`        | `TEXT`        | Four-Seam Fastball, Slider, Curveball, etc.     |
-| `speed_mph`         | `FLOAT`       | Release velocity in mph                         |
-| `zone_x`            | `FLOAT`       | Horizontal plate position (ft, catcher's view)  |
-| `zone_z`            | `FLOAT`       | Vertical plate position (ft)                    |
-| `zone_eval`         | `TEXT`        | `IN ZONE` or `OUT OF ZONE`                      |
-| `pitcher_full_name` | `TEXT`        | Pitcher display name                            |
-| `pitcher_team`      | `TEXT`        | Team abbreviation                               |
-| `timestamp`         | `TIMESTAMPTZ` | Event time (UTC)                                |
+### Backend
+
+```bash
+cd backend
+python3.12 -m venv .venv && source .venv/bin/activate
+pip install -r requirements-dev.txt && pip install -e .
+
+export KAFKA_BOOTSTRAP_SERVERS=localhost:19092 LOG_FORMAT=console
+python -m mlb_pipeline.simulator     # or: python -m mlb_pipeline.producer
+python -m mlb_pipeline.consumer      # reads SUPABASE_URL / SUPABASE_KEY from backend/.env
+
+pytest --cov                          # unit tests
+ruff check src tests && ruff format --check src tests
+python -m mlb_pipeline.schemas        # print the PitchEvent JSON Schema
+```
+
+### Frontend
+
+```bash
+cd frontend
+npm ci
+npm run dev            # http://localhost:3000, reads frontend/.env.local
+npm test               # Vitest + React Testing Library
+npm run lint && npm run typecheck && npm run format:check
+```
+
+CI runs all of these checks, plus Docker image builds, on every push and pull request ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)).
 
 ---
 
-## Project Structure
+## Configuration
+
+Backend settings come from environment variables and are matched case-insensitively. They are defined in [`backend/src/mlb_pipeline/config.py`](backend/src/mlb_pipeline/config.py).
+
+| Variable                        | Default                           | Used by            |
+| ------------------------------- | --------------------------------- | ------------------ |
+| `KAFKA_BOOTSTRAP_SERVERS`       | `localhost:19092`                 | all                |
+| `KAFKA_TOPIC_PITCHES`           | `live-pitches`                    | all                |
+| `KAFKA_TOPIC_DLQ`               | `live-pitches.dlq`                | consumer           |
+| `KAFKA_CONSUMER_GROUP`          | `mlb-supabase-loader`             | consumer           |
+| `SUPABASE_URL` / `SUPABASE_KEY` | —                                 | consumer           |
+| `TEAM_ID` / `TEAM_ABBREVIATION` | `141` / `TOR`                     | producer, consumer |
+| `LIVE_POLL_INTERVAL_SECONDS`    | `5`                               | producer           |
+| `IDLE_POLL_INTERVAL_SECONDS`    | `120`                             | producer           |
+| `CONSUMER_BATCH_SIZE`           | `100`                             | consumer           |
+| `FATIGUE_BASELINE_PITCHES`      | `7`                               | consumer           |
+| `FATIGUE_RECENT_PITCHES`        | `3`                               | consumer           |
+| `FATIGUE_DROP_THRESHOLD_MPH`    | `1.5`                             | consumer           |
+| `FATIGUE_CRITICAL_DROP_MPH`     | `3.0`                             | consumer           |
+| `FATIGUE_COOLDOWN_PITCHES`      | `10`                              | consumer           |
+| `CHAOS_MODE`                    | `random` (`off`, `deterministic`) | simulator          |
+| `CHAOS_PROBABILITY`             | `0.05`                            | simulator          |
+| `CHAOS_FATIGUE_DURATION`        | `12`                              | simulator          |
+| `LOG_LEVEL` / `LOG_FORMAT`      | `INFO` / `json`                   | all                |
+
+---
+
+## Message contract
+
+`PitchEvent` ([`schemas.py`](backend/src/mlb_pipeline/schemas.py)) is the schema for the `live-pitches` topic. Every message carries `schema_version` in both the payload and a Kafka header.
+
+- **Breaking changes** bump the version. Consumers send versions they don't recognise to the DLQ instead of guessing at the format.
+- **Legacy messages** from the older producer (epoch timestamps, `0` meaning "not measured") are still accepted.
+
+| Field              | Type                 | Notes                                             |
+| ------------------ | -------------------- | ------------------------------------------------- |
+| `schema_version`   | `1`                  |                                                   |
+| `game_id`          | int                  | MLB `gamePk`                                      |
+| `unique_id`        | string               | `{gamePk}_{atBatIndex}_{pitchNumber}`; upsert key |
+| `pitch_type`       | string               | e.g. Four-Seam Fastball                           |
+| `speed_mph`        | float \| null        | `null` when not measured                          |
+| `zone_x`, `zone_z` | float \| null        | plate location in feet (catcher's view)           |
+| `pitcher_*`        | string               | id, team, full/first/last name                    |
+| `inning`           | int \| null          |                                                   |
+| `timestamp`        | ISO-8601 with offset | pitch start time from the MLB feed                |
+
+The consumer adds `zone_eval` (`IN ZONE` / `OUT OF ZONE` / `Unknown`) before writing.
+
+---
+
+## Project structure
 
 ```
 mlb-platform/
-├── frontend/
-│   ├── app/
-│   │   ├── page.tsx              # Server component — SSR data fetch
-│   │   └── globals.css
-│   ├── components/
-│   │   ├── live-feed.tsx         # Realtime WebSocket consumer + stream presence
-│   │   ├── strike-zone.tsx       # SVG pitch location visualizer
-│   │   ├── pitch-table.tsx       # Live-updating pitch log
-│   │   ├── velocity-chart.tsx    # Recharts area chart
-│   │   └── metric-card.tsx       # KPI cards
-│   └── lib/types.ts
 ├── backend/
-│   └── src/
-│       ├── streaming/
-│       │   ├── producer.py       # MLB Stats API → Kafka
-│       │   ├── consumer.py       # Kafka → Supabase + intelligence engine
-│       │   └── fake_simulator.py # Synthetic data + chaos injection
-│       └── pipeline/
-│           ├── extract.py        # StatCast batch extraction
-│           ├── transform.py      # Strike zone classification
-│           └── load.py           # Supabase batch loader
-└── docker-compose.yml
+│   ├── src/mlb_pipeline/
+│   │   ├── producer.py        # schedule-driven MLB API poller → Kafka
+│   │   ├── consumer.py        # Kafka → validate → Supabase → alerts; DLQ; manual commits
+│   │   ├── simulator.py       # synthetic stream + chaos fatigue episodes
+│   │   ├── fatigue.py         # bounded, pure fatigue detector
+│   │   ├── schemas.py         # PitchEvent / PitchAlert contracts
+│   │   ├── mlb_api.py         # HTTP client + feed → PitchEvent mapping
+│   │   ├── sink.py            # Supabase upserts with transient/permanent error split
+│   │   ├── kafka.py           # client configs, publisher, shutdown handling
+│   │   └── config.py · log.py · retry.py · health.py · zone.py
+│   ├── tests/                 # pytest suite
+│   ├── Dockerfile             # multi-stage, non-root, heartbeat healthcheck
+│   └── pyproject.toml
+├── frontend/
+│   ├── app/                   # server components; layout hosts the realtime provider
+│   ├── components/
+│   │   ├── providers/live-pitches-provider.tsx  # single channel, backfill, status
+│   │   ├── live.tsx, live-velocity-chart.tsx    # connected widgets
+│   │   ├── pitch-table.tsx, velocity-chart.tsx, strike-zone.tsx  # presentational
+│   │   └── connection-badge.tsx
+│   ├── lib/
+│   │   ├── types.ts           # row types mirroring the migration
+│   │   ├── pitches.ts         # parsing, merge/dedupe, stats, formatting
+│   │   └── supabase/          # browser + server clients
+│   └── Dockerfile             # standalone output, non-root
+├── supabase/migrations/       # schema, RLS, realtime publication
+├── docker-compose.yml
+└── .github/workflows/ci.yml
 ```
-
----
-
-## Key Engineering Decisions
-
-**Why Kafka (Redpanda)?** Decouples the producer from the consumer, enabling the intelligence engine to process, enrich, and route events independently. Redpanda was chosen for its Kafka API compatibility with zero ZooKeeper overhead.
-
-**Why Supabase Realtime over a REST polling loop?** WebSocket push eliminates client polling entirely. The dashboard reacts to database `INSERT` events in under 100ms — matching the latency profile of a real sports broadcast.
-
-**Why server components for the initial fetch?** Next.js 14 App Router server components load the historical pitch snapshot at request time, avoiding a loading flash on first paint. Client components then take over for live updates.
-
-**Why idempotent upserts?** The MLB Stats API occasionally returns the same pitch across polling cycles. Upserting on `unique_id` guarantees the database stays consistent regardless of how many times the producer fires the same event.
 
 ---
 

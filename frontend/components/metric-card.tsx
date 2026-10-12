@@ -11,24 +11,14 @@ type MetricCardProps = {
   icon?: LucideIcon;
 };
 
-export function MetricCard({
-  label,
-  value,
-  unit,
-  helper,
-  helperText,
-  delta,
-  icon: Icon,
-}: MetricCardProps) {
+export function MetricCard({ label, value, unit, helper, helperText, delta, icon: Icon }: MetricCardProps) {
   const positive = (delta ?? 0) >= 0;
   const displayText = helper || helperText; // Safe fallback
 
   return (
     <div className="group relative overflow-hidden rounded-xl border border-border bg-card p-5 shadow-card transition-colors hover:border-primary/40">
       <div className="flex items-start justify-between">
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-          {label}
-        </p>
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
         {Icon && (
           <div className="rounded-md bg-secondary/60 p-1.5 text-accent">
             <Icon className="h-3.5 w-3.5" />
@@ -36,14 +26,8 @@ export function MetricCard({
         )}
       </div>
       <div className="mt-4 flex items-baseline gap-1.5">
-        <span className="font-mono text-3xl font-semibold tracking-tight">
-          {value}
-        </span>
-        {unit && (
-          <span className="text-sm font-medium text-muted-foreground">
-            {unit}
-          </span>
-        )}
+        <span className="font-mono text-3xl font-semibold tracking-tight">{value}</span>
+        {unit && <span className="text-sm font-medium text-muted-foreground">{unit}</span>}
       </div>
       <div className="mt-2 flex items-center gap-2">
         {delta !== undefined && (
@@ -54,17 +38,11 @@ export function MetricCard({
                 : "bg-destructive/15 text-destructive"
             }`}
           >
-            {positive ? (
-              <ArrowUpRight className="h-3 w-3" />
-            ) : (
-              <ArrowDownRight className="h-3 w-3" />
-            )}
+            {positive ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
             {Math.abs(delta).toFixed(1)}%
           </span>
         )}
-        {displayText && (
-          <p className="text-xs text-muted-foreground">{displayText}</p>
-        )}
+        {displayText && <p className="text-xs text-muted-foreground">{displayText}</p>}
       </div>
     </div>
   );

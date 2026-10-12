@@ -26,9 +26,7 @@ const PitchRow = memo(function PitchRow({ pitch }: { pitch: Pitch }) {
       <td className={cn("px-4 py-3 text-right font-mono font-semibold tabular-nums", hot && "text-red-500")}>
         {pitch.speed_mph !== null ? pitch.speed_mph.toFixed(1) : "--"}
       </td>
-      <td className="px-4 py-3 text-right font-mono tabular-nums text-muted-foreground">
-        {pitch.inning ?? "--"}
-      </td>
+      <td className="px-4 py-3 text-right font-mono tabular-nums text-muted-foreground">{pitch.inning ?? "--"}</td>
       <td className="px-4 py-3">
         <span
           className={cn(

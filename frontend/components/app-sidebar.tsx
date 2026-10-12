@@ -32,14 +32,10 @@ export function AppSidebar() {
       <SidebarHeader className="border-b border-sidebar-border">
         <div className="flex items-center gap-2.5 px-2 py-3">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md gradient-accent shadow-glow">
-            <span className="font-display text-base font-bold text-white">
-              S
-            </span>
+            <span className="font-display text-base font-bold text-white">S</span>
           </div>
           <div className="flex flex-col group-data-[collapsible=icon]:hidden">
-            <span className="font-display text-sm font-bold tracking-tight text-white">
-              STATCAST
-            </span>
+            <span className="font-display text-sm font-bold tracking-tight text-white">STATCAST</span>
             <span className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
               Live Analytics
             </span>
@@ -54,11 +50,7 @@ export function AppSidebar() {
             <SidebarMenu>
               {items.map((item) => (
                 <SidebarMenuItem key={item.url}>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={pathname === item.url}
-                    tooltip={item.title}
-                  >
+                  <SidebarMenuButton asChild isActive={pathname === item.url} tooltip={item.title}>
                     <Link href={item.url}>
                       <item.icon className="h-4 w-4" />
                       <span>{item.title}</span>

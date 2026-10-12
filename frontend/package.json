@@ -6,7 +6,12 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",
@@ -26,11 +31,23 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.3",
+    "@testing-library/dom": "^10.4.2",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
     "@types/node": "^22.10.0",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.7.0",
+    "eslint": "^8.57.1",
+    "eslint-config-next": "^14.2.30",
+    "jsdom": "^26.1.0",
     "postcss": "^8.5.14",
+    "prettier": "^3.9.10",
     "tailwindcss": "^4.3.3",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "vitest": "^4.1.11"
+  },
+  "engines": {
+    "node": ">=20.18"
   }
 }
