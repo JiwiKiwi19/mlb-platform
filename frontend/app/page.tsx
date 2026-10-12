@@ -8,14 +8,9 @@ import { PitchTable } from "@/components/pitch-table";
 export const dynamic = "force-dynamic";
 
 export default async function Overview() {
-  // Use SERVICE_KEY to bypass RLS restrictions
-  const serviceKey =
-    process.env.SUPABASE_SERVICE_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    serviceKey!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
   );
 
   const { data } = await supabase

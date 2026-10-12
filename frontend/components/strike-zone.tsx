@@ -9,18 +9,13 @@ export interface StrikeZoneProps {
 }
 
 export function StrikeZone({ pitches }: StrikeZoneProps) {
+  // Pitches are ordered newest-first, matching the database query order.
   const pitchHistory = pitches || [];
-  const latestPitch = pitchHistory.length
-    ? pitchHistory[pitchHistory.length - 1]
-    : { zone_x: null, zone_z: null, zone_eval: "" };
-  // Debug: show incoming pitch values to help diagnose rendering
-  if (process.env.NODE_ENV !== "production") {
-    console.debug("[StrikeZone] pitches:", pitchHistory.length, "latest:", {
-      zone_x: latestPitch?.zone_x,
-      zone_z: latestPitch?.zone_z,
-      zone_eval: latestPitch?.zone_eval,
-    });
-  }
+  const latestPitch = pitchHistory[0] ?? {
+    zone_x: null,
+    zone_z: null,
+    zone_eval: "",
+  };
   const W = 300;
   const H = 320;
 
@@ -62,7 +57,7 @@ export function StrikeZone({ pitches }: StrikeZoneProps) {
         viewBox={`0 0 ${W} ${H}`}
         width="100%"
         style={{
-          height: "100%",
+          aspectRatio: `${W} / ${H}`,
           borderRadius: 10,
           background: "#f8fbff",
           border: "1px solid #dbe8fb",
@@ -89,7 +84,7 @@ export function StrikeZone({ pitches }: StrikeZoneProps) {
         />
 
         {/* Historical dots (faded) */}
-        {pitchHistory.slice(0, -1).map((pitch, i) => {
+        {pitchHistory.slice(1).map((pitch, i) => {
           const px = Number(pitch.zone_x);
           const pz = Number(pitch.zone_z);
           if (!Number.isFinite(px) || !Number.isFinite(pz)) return null;
