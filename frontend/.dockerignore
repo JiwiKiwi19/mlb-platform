@@ -1,0 +1,13 @@
+.env
+.env.*
+node_modules
+.next
+coverage
+*.tsbuildinfo
+**/*.test.ts
+**/*.test.tsx
+vitest.config.*
+Dockerfile
+.dockerignore
+test
+vitest.setup.ts

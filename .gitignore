@@ -14,3 +14,10 @@ venv/
 data/raw/
 data/processed/
 .turbo/
+*.tsbuildinfo
+coverage/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+*.egg-info/

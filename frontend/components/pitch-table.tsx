@@ -1,99 +1,72 @@
-"use client";
-import React, { useState, useEffect } from "react";
-import { createClient } from "@supabase/supabase-js";
+import { memo } from "react";
+import { cn } from "@/lib/utils";
+import { formatPitchTime, isInZone } from "@/lib/pitches";
+import type { Pitch } from "@/lib/types";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-);
+const HOT_VELOCITY_MPH = 96;
 
-interface PitchTableProps {
-  pitches: any[];
-}
+// Rows keep object identity across realtime merges, so only new rows re-render.
+const PitchRow = memo(function PitchRow({ pitch }: { pitch: Pitch }) {
+  const hot = (pitch.speed_mph ?? 0) >= HOT_VELOCITY_MPH;
+  const inZone = isInZone(pitch);
 
-function ClientTime({ timestamp }: { timestamp: string | null }) {
-  const [timeString, setTimeString] = useState("--:--:--");
-  useEffect(() => {
-    if (!timestamp) return;
-    setTimeString(
-      new Date(timestamp).toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-      }),
+  return (
+    <tr className="border-b border-border/60 last:border-0 transition-colors hover:bg-secondary/30">
+      <td className="px-4 py-3 font-mono text-xs tabular-nums text-muted-foreground">
+        <time dateTime={pitch.timestamp ?? pitch.created_at}>
+          {formatPitchTime(pitch.timestamp ?? pitch.created_at)}
+        </time>
+      </td>
+      <td className="px-4 py-3 font-medium">{pitch.pitcher_full_name}</td>
+      <td className="px-4 py-3">
+        <span className="inline-flex items-center rounded-md border border-border bg-secondary/50 px-2 py-0.5 text-xs font-medium">
+          {pitch.pitch_type}
+        </span>
+      </td>
+      <td className={cn("px-4 py-3 text-right font-mono font-semibold tabular-nums", hot && "text-red-500")}>
+        {pitch.speed_mph !== null ? pitch.speed_mph.toFixed(1) : "--"}
+      </td>
+      <td className="px-4 py-3 text-right font-mono tabular-nums text-muted-foreground">{pitch.inning ?? "--"}</td>
+      <td className="px-4 py-3">
+        <span
+          className={cn(
+            "inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider",
+            inZone ? "bg-emerald-500/10 text-emerald-500" : "bg-secondary/60 text-muted-foreground",
+          )}
+        >
+          {pitch.zone_eval}
+        </span>
+      </td>
+    </tr>
+  );
+});
+
+export function PitchTable({ pitches }: { pitches: readonly Pitch[] }) {
+  if (pitches.length === 0) {
+    return (
+      <div className="rounded-lg border border-dashed p-8 text-center text-muted-foreground">
+        Waiting for stream data...
+      </div>
     );
-  }, [timestamp]);
-  return <>{timeString}</>;
-}
-
-export function PitchTable({ pitches: initialPitches }: PitchTableProps) {
-  const [pitches, setPitches] = useState<any[]>(initialPitches);
-
-  useEffect(() => {
-    const channel = supabase
-      .channel("realtime-pitch-table")
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "live_pitches" },
-        (payload) => {
-          setPitches((prev) => [payload.new, ...prev].slice(0, 50));
-        },
-      )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, []);
-
-  if (!pitches || pitches.length === 0) {
-    return <div className="empty-state">Waiting for stream data...</div>;
   }
 
   return (
-    <div className="table-wrapper">
-      <table>
+    <div className="overflow-x-auto rounded-lg border border-border bg-card shadow-sm">
+      <table className="w-full text-sm">
         <thead>
-          <tr>
-            <th>Time</th>
-            <th>Pitcher</th>
-            <th>Type</th>
-            <th>Velo (MPH)</th>
-            <th>Result</th>
+          <tr className="border-b border-border bg-secondary/40 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            <th className="w-28 px-4 py-3">Time (ET)</th>
+            <th className="px-4 py-3">Pitcher</th>
+            <th className="px-4 py-3">Type</th>
+            <th className="px-4 py-3 text-right">Velo</th>
+            <th className="px-4 py-3 text-right">Inn</th>
+            <th className="px-4 py-3">Result</th>
           </tr>
         </thead>
         <tbody>
-          {pitches.map((pitch) => {
-            const isInZone = pitch.zone_eval?.includes("IN ZONE");
-            return (
-              <tr key={pitch.unique_id ?? pitch.id}>
-                <td className="table-time">
-                  <ClientTime timestamp={pitch.timestamp} />
-                </td>
-                <td className="table-pitcher">
-                  {pitch.pitcher_full_name || "Unknown Pitcher"}
-                </td>
-                <td>
-                  <span className="table-type-pill">
-                    {pitch.pitch_type || "Unknown"}
-                  </span>
-                </td>
-                <td>
-                  <span
-                    className={`table-velo ${pitch.speed_mph > 95 ? "table-velo-hot" : ""}`}
-                  >
-                    {pitch.speed_mph ? pitch.speed_mph.toFixed(1) : "--"}
-                  </span>
-                </td>
-                <td>
-                  {isInZone ? (
-                    <span className="table-zone-badge in">In Zone</span>
-                  ) : (
-                    <span className="table-zone-badge out">Ball</span>
-                  )}
-                </td>
-              </tr>
-            );
-          })}
+          {pitches.map((p) => (
+            <PitchRow key={p.unique_id} pitch={p} />
+          ))}
         </tbody>
       </table>
     </div>

@@ -1,135 +1,78 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
-import { createClient } from "@supabase/supabase-js";
-import {
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  CartesianGrid,
-} from "recharts";
+import { useMemo } from "react";
+import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import type { Pitch } from "@/lib/types";
 
-type VelocityChartProps = {
-  pitches: any[];
-};
+type ChartPoint = { idx: number; speed: number; type: string; pitcher: string };
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const supabase = createClient(supabaseUrl, supabaseKey);
+const ACCENT = "oklch(0.72 0.16 195)";
+const AXIS = "oklch(0.68 0.02 255)";
 
-export function VelocityChart({ pitches }: VelocityChartProps) {
-  const [mounted, setMounted] = useState(false);
-  const [displayedPitches, setDisplayedPitches] = useState<any[]>(
-    pitches ?? [],
+function ChartTooltip({ active, payload }: { active?: boolean; payload?: { payload: ChartPoint }[] }) {
+  if (!active || !payload?.length) return null;
+  const d = payload[0].payload;
+  return (
+    <div className="rounded-md border border-border bg-popover px-3 py-2 text-xs shadow-card">
+      <p className="font-mono text-base font-semibold">
+        {d.speed.toFixed(1)} <span className="text-xs text-muted-foreground">mph</span>
+      </p>
+      <p className="text-muted-foreground">
+        {d.type} · {d.pitcher}
+      </p>
+    </div>
   );
+}
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  useEffect(() => {
-    setDisplayedPitches(pitches ?? []);
+export function VelocityChart({ pitches }: { pitches: readonly Pitch[] }) {
+  const { data, domain } = useMemo(() => {
+    // Input is newest-first; plot oldest → newest, skipping unmeasured pitches.
+    const points: ChartPoint[] = [];
+    for (let i = pitches.length - 1; i >= 0; i--) {
+      const p = pitches[i];
+      if (p.speed_mph === null) continue;
+      points.push({ idx: points.length + 1, speed: p.speed_mph, type: p.pitch_type, pitcher: p.pitcher_full_name });
+    }
+    const speeds = points.map((d) => d.speed);
+    const domain: [number, number] = speeds.length
+      ? [Math.floor(Math.min(...speeds) - 3), Math.ceil(Math.max(...speeds) + 3)]
+      : [70, 105];
+    return { data: points, domain };
   }, [pitches]);
 
-  useEffect(() => {
-    if (!mounted) return;
-
-    const channel = supabase
-      .channel("realtime-velocity-chart")
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "live_pitches" },
-        (payload) => {
-          setDisplayedPitches((current) => {
-            const next = [...current, payload.new];
-            return next.slice(-50);
-          });
-        },
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [mounted]);
-
-  const chartData = useMemo(
-    () =>
-      [...displayedPitches].reverse().map((p, index) => ({
-        name: `Pitch ${index + 1}`,
-        speed: p.speed_mph,
-        type: p.pitch_type,
-        zone: p.zone_eval,
-      })),
-    [displayedPitches],
-  );
-
-  const speeds = useMemo(
-    () => chartData.map((d) => d.speed).filter((s) => s > 0),
-    [chartData],
-  );
-
-  if (!mounted || !displayedPitches || displayedPitches.length === 0) {
+  if (data.length === 0) {
     return (
-      <div className="h-[300px] flex items-center justify-center text-muted">
-        Loading chart...
+      <div className="flex h-80 w-full items-center justify-center rounded-lg border border-dashed text-muted-foreground">
+        Waiting for velocity data...
       </div>
     );
   }
-  const minSpeed = speeds.length ? Math.floor(Math.min(...speeds) - 5) : 70;
-  const maxSpeed = speeds.length ? Math.ceil(Math.max(...speeds) + 5) : 105;
 
   return (
-    // Ensure the parent div has a fixed height and width
-    <div style={{ width: "100%", height: 300, minHeight: 300 }}>
+    <div className="h-80 w-full" role="img" aria-label={`Velocity of the last ${data.length} pitches`}>
       <ResponsiveContainer width="100%" height="100%">
-        <AreaChart
-          data={chartData}
-          margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
-        >
+        <AreaChart data={data} margin={{ top: 10, right: 12, left: -10, bottom: 0 }}>
           <defs>
-            <linearGradient id="colorSpeed" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#34d399" stopOpacity={0.4} />
-              <stop offset="95%" stopColor="#34d399" stopOpacity={0} />
+            <linearGradient id="velo" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={ACCENT} stopOpacity={0.5} />
+              <stop offset="100%" stopColor={ACCENT} stopOpacity={0} />
             </linearGradient>
           </defs>
-          <CartesianGrid
-            strokeDasharray="3 3"
-            stroke="rgba(148, 163, 184, 0.1)"
-            vertical={false}
-          />
-          <XAxis dataKey="name" hide />
-          <YAxis
-            domain={[minSpeed, maxSpeed]}
-            stroke="#8ea3c3"
-            fontSize={12}
-            tickLine={false}
-            axisLine={false}
-          />
+          <CartesianGrid stroke="oklch(1 0 0 / 0.05)" vertical={false} />
+          <XAxis dataKey="idx" stroke={AXIS} fontSize={11} tickLine={false} axisLine={false} />
+          <YAxis domain={domain} stroke={AXIS} fontSize={11} tickLine={false} axisLine={false} />
           <Tooltip
-            content={({ active, payload }) => {
-              if (active && payload && payload.length) {
-                const data = payload[0].payload;
-                return (
-                  <div className="stat-tooltip">
-                    <strong>{data.speed} mph</strong>
-                    <p>{data.type}</p>
-                  </div>
-                );
-              }
-              return null;
-            }}
+            cursor={{ stroke: "oklch(0.62 0.22 27)", strokeWidth: 1, strokeDasharray: "3 3" }}
+            content={<ChartTooltip />}
           />
+          {/* Animation replays on every streamed point; disable it for live data. */}
           <Area
             type="monotone"
             dataKey="speed"
-            stroke="#34d399"
-            strokeWidth={3}
-            fillOpacity={1}
-            fill="url(#colorSpeed)"
+            stroke={ACCENT}
+            strokeWidth={2}
+            fill="url(#velo)"
+            isAnimationActive={false}
           />
         </AreaChart>
       </ResponsiveContainer>
