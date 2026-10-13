@@ -1,3 +1,4 @@
+import { mergeRows, parseRows } from "@/lib/rows";
 import type { Pitch, PitchStats, PitchTypeStats, ZoneEval } from "@/lib/types";
 
 /** Rolling window shown across the dashboard (server fetch and realtime buffer). */
@@ -48,28 +49,12 @@ export function parsePitch(row: unknown): Pitch | null {
 }
 
 export function parsePitches(rows: readonly unknown[] | null | undefined): Pitch[] {
-  return (rows ?? []).map(parsePitch).filter((p): p is Pitch => p !== null);
+  return parseRows(rows, parsePitch);
 }
 
-/**
- * Merge incoming pitches into a newest-first list: dedupe by unique_id
- * (incoming wins), order by insertion id, and cap the size.
- * Returns `current` unchanged when nothing new arrived, so React can bail out.
- */
-export function mergePitches(current: Pitch[], incoming: Pitch[], limit = PITCH_WINDOW): Pitch[] {
-  if (incoming.length === 0) return current;
-  const byId = new Map<string, Pitch>();
-  for (const p of current) byId.set(p.unique_id, p);
-  let changed = false;
-  for (const p of incoming) {
-    const existing = byId.get(p.unique_id);
-    if (!existing || existing.id !== p.id || existing.speed_mph !== p.speed_mph) changed = true;
-    byId.set(p.unique_id, p);
-  }
-  if (!changed) return current;
-  return Array.from(byId.values())
-    .sort((a, b) => b.id - a.id)
-    .slice(0, limit);
+/** Newest-first merge into the pitch window; a re-delivered row only counts as changed if its speed differs. */
+export function mergePitches(current: Pitch[], incoming: readonly Pitch[], limit = PITCH_WINDOW): Pitch[] {
+  return mergeRows(current, incoming, limit, (a, b) => a.id === b.id && a.speed_mph === b.speed_mph);
 }
 
 export const isInZone = (p: Pick<Pitch, "zone_eval">) => p.zone_eval === "IN ZONE";
@@ -121,6 +106,7 @@ const timeFormatter = new Intl.DateTimeFormat("en-US", {
   timeZone: "America/New_York",
 });
 
+/** Formats any row timestamp (pitches, alerts) identically on server and client. */
 export function formatPitchTime(iso: string | null): string {
   if (!iso) return "--:--:--";
   const date = new Date(iso);

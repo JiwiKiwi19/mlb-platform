@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, LineChart, Target } from "lucide-react";
+import { Bell, LayoutDashboard, LineChart, Target } from "lucide-react";
 import { ConnectionBadge } from "@/components/connection-badge";
 import {
   Sidebar,
@@ -22,6 +22,7 @@ const items = [
   { title: "Overview", url: "/", icon: LayoutDashboard },
   { title: "Velocity", url: "/velocity", icon: LineChart },
   { title: "Strike Zone", url: "/strike-zone", icon: Target },
+  { title: "Alerts", url: "/alerts", icon: Bell },
 ];
 
 export function AppSidebar() {
