@@ -67,8 +67,3 @@ export function AlertList({ alerts }: { alerts: readonly PitchAlert[] }) {
     </ul>
   );
 }
-
-export function hello() {
-  ("hello world");
-}
-// This is the test
