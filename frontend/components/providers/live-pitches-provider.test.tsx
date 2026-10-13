@@ -1,65 +1,17 @@
 import { act, render, screen, waitFor } from "@testing-library/react";
 import { StrictMode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { LivePitchesProvider, livePitchesReducer, useLivePitches } from "@/components/providers/live-pitches-provider";
 import type { Pitch } from "@/lib/types";
+import { fakeSupabase } from "@/test/fake-supabase";
 import { makePitch } from "@/test/factories";
 
-// ---- fake Supabase client -------------------------------------------------
+vi.mock("@/lib/supabase/client", async () => {
+  const { fakeSupabase } = await import("@/test/fake-supabase");
+  return { getBrowserSupabase: () => fakeSupabase.client };
+});
 
-type StatusCallback = (status: string) => void;
-type InsertHandler = (payload: { new: unknown }) => void;
-
-class FakeChannel {
-  insertHandler?: InsertHandler;
-  statusCallback?: StatusCallback;
-  constructor(public name: string) {}
-  on(_event: string, _filter: unknown, handler: InsertHandler) {
-    this.insertHandler = handler;
-    return this;
-  }
-  subscribe(cb: StatusCallback) {
-    this.statusCallback = cb;
-    return this;
-  }
-}
-
-const fake = {
-  channels: [] as FakeChannel[],
-  removed: [] as FakeChannel[],
-  backfillRows: [] as Pitch[],
-  backfillCalls: 0,
-};
-
-const fakeClient = {
-  channel: (name: string) => {
-    const ch = new FakeChannel(name);
-    fake.channels.push(ch);
-    return ch;
-  },
-  removeChannel: async (ch: FakeChannel) => {
-    fake.removed.push(ch);
-    return "ok";
-  },
-  from: () => ({
-    select: () => ({
-      order: () => ({
-        limit: async () => {
-          fake.backfillCalls += 1;
-          return { data: fake.backfillRows, error: null };
-        },
-      }),
-    }),
-  }),
-};
-
-vi.mock("@/lib/supabase/client", () => ({ getBrowserSupabase: () => fakeClient }));
-
-// Imported after the mock is registered.
-const { LivePitchesProvider, useLivePitches, livePitchesReducer } =
-  await import("@/components/providers/live-pitches-provider");
-
-// ---- helpers --------------------------------------------------------------
-
+const TABLE = "live_pitches";
 let renders = 0;
 
 function Probe() {
@@ -74,8 +26,9 @@ function Probe() {
   );
 }
 
-const channel = () => fake.channels[fake.channels.length - 1];
+const channel = () => fakeSupabase.channelFor(TABLE);
 const ids = () => screen.getByTestId("ids").textContent;
+const backfills = () => fakeSupabase.backfillCalls[TABLE] ?? 0;
 
 function setup(initial: Pitch[] = []) {
   return render(
@@ -86,16 +39,11 @@ function setup(initial: Pitch[] = []) {
 }
 
 beforeEach(() => {
-  fake.channels = [];
-  fake.removed = [];
-  fake.backfillRows = [];
-  fake.backfillCalls = 0;
+  fakeSupabase.reset();
   renders = 0;
 });
 
 afterEach(() => vi.restoreAllMocks());
-
-// ---- tests ----------------------------------------------------------------
 
 describe("LivePitchesProvider", () => {
   it("renders server-provided pitches immediately and starts connecting", () => {
@@ -105,22 +53,22 @@ describe("LivePitchesProvider", () => {
   });
 
   it("goes live and backfills on subscribe", async () => {
-    fake.backfillRows = [makePitch({ unique_id: "missed", id: 10 })];
+    fakeSupabase.setBackfill(TABLE, [makePitch({ unique_id: "missed", id: 10 })]);
     setup([makePitch({ unique_id: "ssr", id: 1 })]);
 
-    act(() => channel().statusCallback?.("SUBSCRIBED"));
+    act(() => channel().emitStatus("SUBSCRIBED"));
 
     expect(screen.getByTestId("status")).toHaveTextContent("live");
     await waitFor(() => expect(ids()).toBe("missed,ssr"));
-    expect(fake.backfillCalls).toBe(1);
+    expect(backfills()).toBe(1);
   });
 
   it("prepends realtime inserts and ignores malformed payloads", async () => {
     setup([makePitch({ unique_id: "old", id: 1 })]);
 
     act(() => {
-      channel().insertHandler?.({ new: makePitch({ unique_id: "new", id: 2 }) });
-      channel().insertHandler?.({ new: { garbage: true } });
+      channel().emitInsert(makePitch({ unique_id: "new", id: 2 }));
+      channel().emitInsert({ garbage: true });
     });
 
     await waitFor(() => expect(ids()).toBe("new,old"));
@@ -131,7 +79,7 @@ describe("LivePitchesProvider", () => {
     const before = renders;
 
     act(() => {
-      for (let i = 1; i <= 100; i++) channel().insertHandler?.({ new: makePitch({ id: i }) });
+      for (let i = 1; i <= 100; i++) channel().emitInsert(makePitch({ id: i }));
     });
 
     await waitFor(() => expect(screen.getByTestId("count")).toHaveTextContent("50"));
@@ -140,15 +88,15 @@ describe("LivePitchesProvider", () => {
 
   it("deduplicates a pitch delivered by both backfill and realtime", async () => {
     const pitch = makePitch({ unique_id: "dup", id: 5 });
-    fake.backfillRows = [pitch];
+    fakeSupabase.setBackfill(TABLE, [pitch]);
     setup();
 
     act(() => {
-      channel().insertHandler?.({ new: pitch });
-      channel().statusCallback?.("SUBSCRIBED");
+      channel().emitInsert(pitch);
+      channel().emitStatus("SUBSCRIBED");
     });
 
-    await waitFor(() => expect(fake.backfillCalls).toBe(1));
+    await waitFor(() => expect(backfills()).toBe(1));
     await waitFor(() => expect(ids()).toBe("dup"));
   });
 
@@ -156,29 +104,28 @@ describe("LivePitchesProvider", () => {
     ["CHANNEL_ERROR", "reconnecting"],
     ["TIMED_OUT", "reconnecting"],
     ["CLOSED", "offline"],
-  ])("maps %s to %s", (raw, expected) => {
+  ] as const)("maps %s to %s", (raw, expected) => {
     setup();
-    act(() => channel().statusCallback?.(raw));
+    act(() => channel().emitStatus(raw));
     expect(screen.getByTestId("status")).toHaveTextContent(expected);
   });
 
   it("backfills again after a reconnect", async () => {
     setup();
-    act(() => channel().statusCallback?.("SUBSCRIBED"));
-    act(() => channel().statusCallback?.("CHANNEL_ERROR"));
-    act(() => channel().statusCallback?.("SUBSCRIBED"));
-    await waitFor(() => expect(fake.backfillCalls).toBe(2));
+    act(() => channel().emitStatus("SUBSCRIBED"));
+    act(() => channel().emitStatus("CHANNEL_ERROR"));
+    act(() => channel().emitStatus("SUBSCRIBED"));
+    await waitFor(() => expect(backfills()).toBe(2));
   });
 
-  it("removes its channel on unmount and ignores late events", async () => {
+  it("removes its channel on unmount and ignores late events", () => {
     const { unmount } = setup();
     const ch = channel();
     unmount();
 
-    expect(fake.removed).toContain(ch);
-    // A late status callback after unmount must not throw or update state.
-    expect(() => ch.statusCallback?.("SUBSCRIBED")).not.toThrow();
-    expect(fake.backfillCalls).toBe(0);
+    expect(fakeSupabase.removed).toContain(ch);
+    expect(() => ch.emitStatus("SUBSCRIBED")).not.toThrow();
+    expect(backfills()).toBe(0);
   });
 
   it("uses a fresh channel name on every mount (StrictMode double-mount)", () => {
@@ -189,9 +136,9 @@ describe("LivePitchesProvider", () => {
         </LivePitchesProvider>
       </StrictMode>,
     );
-    expect(fake.channels).toHaveLength(2);
-    expect(fake.removed).toEqual([fake.channels[0]]);
-    expect(new Set(fake.channels.map((c) => c.name)).size).toBe(2);
+    expect(fakeSupabase.channels).toHaveLength(2);
+    expect(fakeSupabase.removed).toEqual([fakeSupabase.channels[0]]);
+    expect(new Set(fakeSupabase.channels.map((c) => c.name)).size).toBe(2);
   });
 
   it("throws a clear error when used outside the provider", () => {
