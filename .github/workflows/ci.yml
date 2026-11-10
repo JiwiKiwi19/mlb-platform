@@ -114,7 +114,6 @@ jobs:
           context: backend
           push: ${{ github.ref == 'refs/heads/main' && github.event_name == 'push' }}
           tags: |
-            mlb-pipeline:ci
             ghcr.io/${{ steps.repo.outputs.name }}/mlb-pipeline:${{ github.sha }}
             ghcr.io/${{ steps.repo.outputs.name }}/mlb-pipeline:latest
           cache-from: type=gha,scope=backend
@@ -125,7 +124,6 @@ jobs:
           context: frontend
           push: ${{ github.ref == 'refs/heads/main' && github.event_name == 'push' }}
           tags: |
-            mlb-frontend:ci
             ghcr.io/${{ steps.repo.outputs.name }}/mlb-frontend:${{ github.sha }}
             ghcr.io/${{ steps.repo.outputs.name }}/mlb-frontend:latest
           build-args: |
