@@ -29,7 +29,7 @@ jobs:
       - run: pip install -r requirements-dev.txt
       - run: ruff check src tests
       - run: ruff format --check src tests
-      - run: pytest --cov --cov-report=term-missing
+      - run: pytest --cov --cov-report=term-missing --cov-fail-under=75
 
   frontend:
     name: Frontend (lint + types + tests + build)
@@ -42,6 +42,7 @@ jobs:
       # Placeholder values: the build only needs them to exist; no network calls happen at build time.
       NEXT_PUBLIC_SUPABASE_URL: http://localhost:54321
       NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder
+      NEXT_PUBLIC_TEAM_ABBREVIATION: TOR
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -80,5 +81,6 @@ jobs:
           build-args: |
             NEXT_PUBLIC_SUPABASE_URL=http://localhost:54321
             NEXT_PUBLIC_SUPABASE_ANON_KEY=ci-placeholder
+            NEXT_PUBLIC_TEAM_ABBREVIATION=TOR
           cache-from: type=gha,scope=frontend
           cache-to: type=gha,mode=max,scope=frontend

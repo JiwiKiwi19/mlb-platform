@@ -14,7 +14,7 @@ export default function Overview() {
   return (
     <div className="mx-auto flex max-w-350 flex-col gap-6">
       <PageHeader
-        eyebrow="Game Day · TOR Live Feed"
+        eyebrow={`Game Day · ${process.env.NEXT_PUBLIC_TEAM_ABBREVIATION ?? "TOR"} Live Feed`}
         title="Live Pitch Intelligence"
         description="Real-time Statcast feed processed through the streaming pipeline. Every pitch, classified and scored within a second of release."
         meta={
