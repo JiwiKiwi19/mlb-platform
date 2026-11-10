@@ -83,10 +83,10 @@ jobs:
         # a Next.js 15+ upgrade (breaking). Remove once that upgrade lands.
         continue-on-error: true
         run: npm audit --audit-level=high --package-lock-only
-      - name: TruffleHog secret scan
-        uses: trufflesecurity/trufflehog@v3
-        with:
-          extra_args: --only-verified
+      - name: Gitleaks secret scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   images:
     name: Docker images
@@ -97,6 +97,9 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@v4
+      - name: Lowercase repository name
+        id: repo
+        run: echo "name=${GITHUB_REPOSITORY,,}" >> $GITHUB_OUTPUT
       - uses: docker/setup-buildx-action@v3
       - name: Log in to GHCR
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
@@ -112,8 +115,8 @@ jobs:
           push: ${{ github.ref == 'refs/heads/main' && github.event_name == 'push' }}
           tags: |
             mlb-pipeline:ci
-            ghcr.io/${{ github.repository }}/mlb-pipeline:${{ github.sha }}
-            ghcr.io/${{ github.repository }}/mlb-pipeline:latest
+            ghcr.io/${{ steps.repo.outputs.name }}/mlb-pipeline:${{ github.sha }}
+            ghcr.io/${{ steps.repo.outputs.name }}/mlb-pipeline:latest
           cache-from: type=gha,scope=backend
           cache-to: type=gha,mode=max,scope=backend
       - name: Build (+ push on main) frontend image
@@ -123,8 +126,8 @@ jobs:
           push: ${{ github.ref == 'refs/heads/main' && github.event_name == 'push' }}
           tags: |
             mlb-frontend:ci
-            ghcr.io/${{ github.repository }}/mlb-frontend:${{ github.sha }}
-            ghcr.io/${{ github.repository }}/mlb-frontend:latest
+            ghcr.io/${{ steps.repo.outputs.name }}/mlb-frontend:${{ github.sha }}
+            ghcr.io/${{ steps.repo.outputs.name }}/mlb-frontend:latest
           build-args: |
             NEXT_PUBLIC_SUPABASE_URL=http://localhost:54321
             NEXT_PUBLIC_SUPABASE_ANON_KEY=ci-placeholder
@@ -157,13 +160,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: Lowercase repository name
+        id: repo
+        run: echo "name=${GITHUB_REPOSITORY,,}" >> $GITHUB_OUTPUT
       - name: Deploy frontend to staging
         working-directory: frontend
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: |
           fly deploy \
-            --image ghcr.io/${{ github.repository }}/mlb-frontend:${{ github.sha }} \
+            --image ghcr.io/${{ steps.repo.outputs.name }}/mlb-frontend:${{ github.sha }} \
             --ha=false
       - name: Deploy consumer to staging
         working-directory: backend
@@ -171,7 +177,7 @@ jobs:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: |
           fly deploy \
-            --image ghcr.io/${{ github.repository }}/mlb-pipeline:${{ github.sha }} \
+            --image ghcr.io/${{ steps.repo.outputs.name }}/mlb-pipeline:${{ github.sha }} \
             --ha=false
       - name: Post-deploy health check
         env:
@@ -193,13 +199,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: Lowercase repository name
+        id: repo
+        run: echo "name=${GITHUB_REPOSITORY,,}" >> $GITHUB_OUTPUT
       - name: Deploy frontend to production
         working-directory: frontend
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: |
           fly deploy \
-            --image ghcr.io/${{ github.repository }}/mlb-frontend:${{ github.sha }} \
+            --image ghcr.io/${{ steps.repo.outputs.name }}/mlb-frontend:${{ github.sha }} \
             --ha=false
       - name: Deploy consumer to production
         working-directory: backend
@@ -207,7 +216,7 @@ jobs:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: |
           fly deploy \
-            --image ghcr.io/${{ github.repository }}/mlb-pipeline:${{ github.sha }} \
+            --image ghcr.io/${{ steps.repo.outputs.name }}/mlb-pipeline:${{ github.sha }} \
             --ha=false
       - name: Post-deploy health check
         env:
