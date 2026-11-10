@@ -16,5 +16,11 @@ export default defineConfig({
       NEXT_PUBLIC_SUPABASE_URL: "http://localhost:54321",
       NEXT_PUBLIC_SUPABASE_ANON_KEY: "test-anon-key",
     },
+    coverage: {
+      provider: "v8",
+      reporter: ["text", "lcov"],
+      include: ["**/*.{ts,tsx}"],
+      exclude: ["node_modules", ".next", "**/*.test.{ts,tsx}", "**/*.config.*", "vitest.setup.ts"],
+    },
   },
 });

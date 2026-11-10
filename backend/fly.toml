@@ -1,0 +1,32 @@
+# Fly.io configuration for the Python pipeline consumer.
+# App name must be globally unique — update "mlb-consumer-staging" before deploying.
+#
+# Initial setup (run once):
+#   fly apps create mlb-consumer-staging   # or your chosen app name
+#   fly secrets set \
+#     SUPABASE_URL=https://<project>.supabase.co \
+#     SUPABASE_KEY=<service-role-key> \
+#     KAFKA_BOOTSTRAP_SERVERS=<redpanda-host>:9092 \
+#     --app mlb-consumer-staging
+#
+# Deployment (handled by CI via deploy-staging job):
+#   fly deploy --image ghcr.io/<owner>/<repo>/mlb-pipeline:<sha> --ha=false
+#
+# The consumer is a background worker with no inbound HTTP port.
+# Fly.io restarts it automatically if the process exits non-zero.
+
+app = "mlb-consumer-staging"
+primary_region = "yyz"
+
+# Non-secret runtime config. Secrets (SUPABASE_KEY etc.) are set via `fly secrets set`.
+[env]
+  LOG_FORMAT = "json"
+  HEARTBEAT_PATH = "/tmp/mlb-pipeline.heartbeat"
+  KAFKA_TOPIC_PITCHES = "live-pitches"
+  KAFKA_TOPIC_DLQ = "live-pitches-dlq"
+  KAFKA_CONSUMER_GROUP = "mlb-consumer"
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory_mb = 256
