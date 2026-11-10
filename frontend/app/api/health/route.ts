@@ -1,6 +1,5 @@
-export const dynamic = "force-dynamic";
+import { NextResponse } from "next/server";
 
-// Liveness probe for container orchestration. Exposes no configuration.
 export function GET() {
-  return Response.json({ status: "ok" });
+  return NextResponse.json({ ok: true });
 }

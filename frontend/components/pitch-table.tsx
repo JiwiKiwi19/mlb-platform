@@ -60,7 +60,7 @@ export function PitchTable({ pitches }: { pitches: readonly Pitch[] }) {
             <th className="px-4 py-3">Type</th>
             <th className="px-4 py-3 text-right">Velo</th>
             <th className="px-4 py-3 text-right">Inn</th>
-            <th className="px-4 py-3">Result</th>
+            <th className="px-4 py-3">Zone</th>
           </tr>
         </thead>
         <tbody>

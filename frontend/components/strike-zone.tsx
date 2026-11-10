@@ -43,7 +43,7 @@ export function StrikeZone({ pitches }: StrikeZoneProps) {
     <figure className="mx-auto w-full max-w-85 rounded-xl border border-border bg-card p-3.5 text-center shadow-card">
       <svg
         viewBox={`0 0 ${W} ${H}`}
-        className="block w-full rounded-lg border border-[#dbe8fb] bg-[#f8fbff]"
+        className="block w-full rounded-lg border border-border bg-secondary"
         style={{ aspectRatio: `${W} / ${H}` }}
         role="img"
         aria-label={`Strike zone with ${pitches.length} pitch locations`}

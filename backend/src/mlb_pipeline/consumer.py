@@ -114,8 +114,8 @@ def warm_start(detector: FatigueDetector, sink: SupabaseSink) -> None:
     for row in sink.recent_pitches(since=timedelta(hours=12)):
         try:
             events.append(PitchEvent.model_validate(row))
-        except ValidationError:
-            continue
+        except ValidationError as exc:
+            log.warning("warm_start_row_invalid", error=exc.errors(include_url=False))
     detector.prime(events)
     log.info("detector_warmed", pitches=len(events), tracked_keys=detector.tracked_keys)
 

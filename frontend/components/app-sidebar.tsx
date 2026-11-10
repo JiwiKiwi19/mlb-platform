@@ -66,7 +66,7 @@ export function AppSidebar() {
 
       <SidebarFooter className="border-t border-sidebar-border">
         <div className="px-2 py-2 group-data-[collapsible=icon]:hidden">
-          <ConnectionBadge label="TOR" />
+          <ConnectionBadge label={process.env.NEXT_PUBLIC_TEAM_ABBREVIATION ?? "TOR"} />
         </div>
       </SidebarFooter>
     </Sidebar>
