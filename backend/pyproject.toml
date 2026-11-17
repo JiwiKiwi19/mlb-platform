@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "mlb-pipeline"
 version = "1.0.0"
 description = "Live MLB pitch streaming: MLB Stats API → Kafka → Supabase"
-requires-python = ">=3.11"
+requires-python = ">=3.14"
 dynamic = ["dependencies"]
 
 [tool.setuptools.dynamic]
@@ -26,7 +26,7 @@ branch = true
 
 [tool.ruff]
 line-length = 120
-target-version = "py311"
+target-version = "py314"
 src = ["src", "tests"]
 
 [tool.ruff.lint]

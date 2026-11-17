@@ -3,7 +3,7 @@
 > Event-driven, real-time MLB pitch intelligence — MLB Stats API → Kafka (Redpanda) → Python intelligence engine → Supabase → Next.js live dashboard.
 
 ![Next.js](https://img.shields.io/badge/Next.js_14-000000?style=flat-square&logo=next.js&logoColor=white)
-![Python](https://img.shields.io/badge/Python_3.12-3776AB?style=flat-square&logo=python&logoColor=white)
+![Python](https://img.shields.io/badge/Python_3.14-3776AB?style=flat-square&logo=python&logoColor=white)
 ![Kafka](https://img.shields.io/badge/Redpanda_Kafka-E50695?style=flat-square&logo=apachekafka&logoColor=white)
 ![Supabase](https://img.shields.io/badge/Supabase-3ECF8E?style=flat-square&logo=supabase&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white)
@@ -69,7 +69,7 @@ After an alert, a 10-pitch cooldown prevents repeat alerts while velocity stays 
 
 - Docker with Compose v2
 - A [Supabase](https://supabase.com) project
-- For local development: Node.js 20.18+ (22 LTS recommended) and Python 3.12
+- For local development: Node.js 20.18+ (22 LTS recommended) and Python 3.14
 
 ### 1. Create the database schema
 
@@ -125,7 +125,7 @@ docker compose logs -f consumer   # structured JSON logs
 
 ```bash
 cd backend
-python3.12 -m venv .venv && source .venv/bin/activate
+python3.14 -m venv .venv && source .venv/bin/activate
 pip install -r requirements-dev.txt && pip install -e .
 
 export KAFKA_BOOTSTRAP_SERVERS=localhost:19092 LOG_FORMAT=console
