@@ -66,7 +66,7 @@ class LiveGamePoller:
 
 def run(settings: Settings, stop: threading.Event) -> None:
     publisher = PitchPublisher(
-        Producer(producer_config(settings.kafka_bootstrap_servers, "mlb-live-producer")),
+        Producer(producer_config(settings.kafka_connection(), "mlb-live-producer")),
         settings.kafka_topic_pitches,
     )
     poller = LiveGamePoller(

@@ -126,8 +126,8 @@ def run(settings: Settings, stop: threading.Event) -> None:
     detector = build_detector(settings)
     warm_start(detector, sink)
 
-    dlq_producer = Producer(producer_config(settings.kafka_bootstrap_servers, "mlb-consumer-dlq"))
-    consumer = Consumer(consumer_config(settings.kafka_bootstrap_servers, settings.kafka_consumer_group))
+    dlq_producer = Producer(producer_config(settings.kafka_connection(), "mlb-consumer-dlq"))
+    consumer = Consumer(consumer_config(settings.kafka_connection(), settings.kafka_consumer_group))
     consumer.subscribe([settings.kafka_topic_pitches])
     log.info("consumer_started", topic=settings.kafka_topic_pitches, group=settings.kafka_consumer_group)
 

@@ -26,6 +26,12 @@ class Settings(BaseSettings):
     kafka_topic_pitches: str = "live-pitches"
     kafka_topic_dlq: str = "live-pitches.dlq"
     kafka_consumer_group: str = "mlb-supabase-loader"
+    # Local Redpanda needs no auth. Managed brokers (e.g. Redpanda Cloud) use
+    # KAFKA_SECURITY_PROTOCOL=SASL_SSL plus a SASL username/password.
+    kafka_security_protocol: Literal["PLAINTEXT", "SSL", "SASL_PLAINTEXT", "SASL_SSL"] = "PLAINTEXT"
+    kafka_sasl_mechanism: Literal["PLAIN", "SCRAM-SHA-256", "SCRAM-SHA-512"] = "SCRAM-SHA-256"
+    kafka_sasl_username: str | None = None
+    kafka_sasl_password: SecretStr | None = None
 
     # Supabase (consumer only). Must be a service-role key: RLS denies anon writes.
     supabase_url: str | None = None
@@ -62,6 +68,25 @@ class Settings(BaseSettings):
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
     log_format: Literal["json", "console"] = "json"
     heartbeat_path: Path = Path("/tmp/mlb-pipeline.heartbeat")
+
+    def kafka_connection(self) -> dict[str, str]:
+        """librdkafka settings shared by every producer and consumer: broker address and auth."""
+        conn = {
+            "bootstrap.servers": self.kafka_bootstrap_servers,
+            "security.protocol": self.kafka_security_protocol,
+        }
+        if self.kafka_security_protocol.startswith("SASL_"):
+            if not self.kafka_sasl_username or not self.kafka_sasl_password:
+                raise RuntimeError(
+                    f"KAFKA_SASL_USERNAME and KAFKA_SASL_PASSWORD must be set when "
+                    f"KAFKA_SECURITY_PROTOCOL={self.kafka_security_protocol}"
+                )
+            conn |= {
+                "sasl.mechanism": self.kafka_sasl_mechanism,
+                "sasl.username": self.kafka_sasl_username,
+                "sasl.password": self.kafka_sasl_password.get_secret_value(),
+            }
+        return conn
 
     def require_supabase(self) -> tuple[str, str]:
         if not self.supabase_url or not self.supabase_key:

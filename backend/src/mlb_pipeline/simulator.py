@@ -94,7 +94,7 @@ def run(settings: Settings, stop: threading.Event, seed: int | None = None) -> N
         rng=rng,
     )
     publisher = PitchPublisher(
-        Producer(producer_config(settings.kafka_bootstrap_servers, "mlb-simulator")),
+        Producer(producer_config(settings.kafka_connection(), "mlb-simulator")),
         settings.kafka_topic_pitches,
     )
     log.info("simulator_started", chaos_mode=settings.chaos_mode)
