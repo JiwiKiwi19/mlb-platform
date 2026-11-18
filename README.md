@@ -151,6 +151,21 @@ CI runs all of these checks, plus Docker image builds, on every push and pull re
 
 ---
 
+## Deployment
+
+Deploys are triggered by pushes to `main` through each platform's GitHub integration; CI itself does not deploy.
+
+| Piece | Platform | Setup |
+| --- | --- | --- |
+| Frontend | Vercel | Root Directory `frontend`. Set `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `NEXT_PUBLIC_TEAM_ABBREVIATION`. PRs get Preview deployments. |
+| Consumer | Railway | Root Directory `backend` (uses [`backend/railway.toml`](backend/railway.toml)). Default start command runs the consumer. |
+| Producer | Railway | Same repo and root directory; start command `python -m mlb_pipeline.producer`. |
+| Kafka | Redpanda Cloud (Serverless) | Create topics `live-pitches` and `live-pitches.dlq`. Give both Railway services `KAFKA_BOOTSTRAP_SERVERS`, `KAFKA_SECURITY_PROTOCOL=SASL_SSL` and the SASL credentials. |
+
+Supabase credentials (`SUPABASE_URL`, `SUPABASE_KEY`) are set on the Railway consumer only.
+
+---
+
 ## Configuration
 
 Backend settings come from environment variables and are matched case-insensitively. They are defined in [`backend/src/mlb_pipeline/config.py`](backend/src/mlb_pipeline/config.py).
@@ -161,6 +176,9 @@ Backend settings come from environment variables and are matched case-insensitiv
 | `KAFKA_TOPIC_PITCHES`           | `live-pitches`                    | all                |
 | `KAFKA_TOPIC_DLQ`               | `live-pitches.dlq`                | consumer           |
 | `KAFKA_CONSUMER_GROUP`          | `mlb-supabase-loader`             | consumer           |
+| `KAFKA_SECURITY_PROTOCOL`       | `PLAINTEXT` (`SASL_SSL` for cloud) | all               |
+| `KAFKA_SASL_MECHANISM`          | `SCRAM-SHA-256`                   | all (SASL only)    |
+| `KAFKA_SASL_USERNAME` / `KAFKA_SASL_PASSWORD` | —                   | all (SASL only)    |
 | `SUPABASE_URL` / `SUPABASE_KEY` | —                                 | consumer           |
 | `TEAM_ID` / `TEAM_ABBREVIATION` | `141` / `TOR`                     | producer, consumer |
 | `LIVE_POLL_INTERVAL_SECONDS`    | `5`                               | producer           |
@@ -218,6 +236,7 @@ mlb-platform/
 │   │   └── config.py · log.py · retry.py · health.py · zone.py
 │   ├── tests/                 # pytest suite
 │   ├── Dockerfile             # multi-stage, non-root, heartbeat healthcheck
+│   ├── railway.toml           # Railway build + restart policy
 │   └── pyproject.toml
 ├── frontend/
 │   ├── app/                   # server components; layout hosts the realtime provider

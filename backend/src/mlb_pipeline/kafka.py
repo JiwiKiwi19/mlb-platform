@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import signal
 import threading
+from collections.abc import Mapping
 from typing import Any
 
 from confluent_kafka import KafkaError, Message, Producer
@@ -14,9 +15,9 @@ from mlb_pipeline.schemas import PitchEvent
 log = get_logger(__name__)
 
 
-def producer_config(bootstrap_servers: str, client_id: str) -> dict[str, Any]:
+def producer_config(connection: Mapping[str, str], client_id: str) -> dict[str, Any]:
     return {
-        "bootstrap.servers": bootstrap_servers,
+        **connection,
         "client.id": client_id,
         # Exactly-once per partition from the producer's side: no duplicates or
         # reordering on broker retries. Implies acks=all.
@@ -29,9 +30,9 @@ def producer_config(bootstrap_servers: str, client_id: str) -> dict[str, Any]:
     }
 
 
-def consumer_config(bootstrap_servers: str, group_id: str) -> dict[str, Any]:
+def consumer_config(connection: Mapping[str, str], group_id: str) -> dict[str, Any]:
     return {
-        "bootstrap.servers": bootstrap_servers,
+        **connection,
         "group.id": group_id,
         # Offsets are committed only after rows are durably written to Supabase.
         "enable.auto.commit": False,
