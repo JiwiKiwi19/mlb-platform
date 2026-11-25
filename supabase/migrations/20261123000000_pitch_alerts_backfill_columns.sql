@@ -18,5 +18,9 @@ begin
   end if;
 end $$;
 
+-- Some hand-made tables typed unique_id as uuid, but alert IDs are "fatigue:<pitch unique_id>".
+alter table public.pitch_alerts alter column unique_id drop default;
+alter table public.pitch_alerts alter column unique_id type text using unique_id::text;
+
 -- PostgREST caches the schema; reload it so the API sees the new columns immediately.
 notify pgrst, 'reload schema';
