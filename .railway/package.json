@@ -1,0 +1,8 @@
+{
+  "name": "mlb-platform-railway-iac",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "railway": "3.17.0"
+  }
+}

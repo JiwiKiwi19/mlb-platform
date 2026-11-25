@@ -158,8 +158,7 @@ Deploys are triggered by pushes to `main` through each platform's GitHub integra
 | Piece | Platform | Setup |
 | --- | --- | --- |
 | Frontend | Vercel | Root Directory `frontend`. Set `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `NEXT_PUBLIC_TEAM_ABBREVIATION`. PRs get Preview deployments. |
-| Consumer | Railway | Root Directory `backend` (uses [`backend/railway.toml`](backend/railway.toml)). Default start command runs the consumer. |
-| Producer | Railway | Same repo and root directory; start command `python -m mlb_pipeline.producer`. |
+| Consumer + Producer | Railway | Both services are defined in [`.railway/railway.ts`](.railway/railway.ts) (build from `backend/Dockerfile`, wait for CI, restart on crash). Preview with `railway config plan`, apply with `railway config apply`. Variables are not in the file; set them per service in Railway. |
 | Kafka | Redpanda Cloud (Serverless) | Create topics `live-pitches` and `live-pitches.dlq`. Give both Railway services `KAFKA_BOOTSTRAP_SERVERS`, `KAFKA_SECURITY_PROTOCOL=SASL_SSL` and the SASL credentials. |
 
 Supabase credentials (`SUPABASE_URL`, `SUPABASE_KEY`) are set on the Railway consumer only.
@@ -236,7 +235,6 @@ mlb-platform/
 │   │   └── config.py · log.py · retry.py · health.py · zone.py
 │   ├── tests/                 # pytest suite
 │   ├── Dockerfile             # multi-stage, non-root, heartbeat healthcheck
-│   ├── railway.toml           # Railway build + restart policy
 │   └── pyproject.toml
 ├── frontend/
 │   ├── app/                   # server components; layout hosts the realtime provider
@@ -251,6 +249,7 @@ mlb-platform/
 │   │   └── supabase/          # browser + server clients
 │   └── Dockerfile             # standalone output, non-root
 ├── supabase/migrations/       # schema, RLS, realtime publication
+├── .railway/railway.ts        # Railway services (infrastructure as code)
 ├── docker-compose.yml
 └── .github/workflows/ci.yml
 ```
