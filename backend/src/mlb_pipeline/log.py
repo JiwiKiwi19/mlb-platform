@@ -16,7 +16,12 @@ def configure_logging(level: str = "INFO", fmt: str = "json") -> None:
         structlog.processors.StackInfoRenderer(),
     ]
     if fmt == "json":
-        processors += [structlog.processors.dict_tracebacks, structlog.processors.JSONRenderer()]
+        # show_locals=False: structlog's default dumps every frame's local variables into the
+        # traceback, which leaks credentials (e.g. the Supabase key in consumer.run) into logs.
+        tracebacks = structlog.processors.ExceptionRenderer(
+            structlog.tracebacks.ExceptionDictTransformer(show_locals=False)
+        )
+        processors += [tracebacks, structlog.processors.JSONRenderer()]
     else:
         processors += [structlog.dev.ConsoleRenderer()]
 
